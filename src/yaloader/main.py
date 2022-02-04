@@ -474,7 +474,7 @@ class ConfigLoader:
             if file_path.with_suffix('.yaml').is_file():
                 file_path = file_path.with_suffix('.yaml')
             else:
-                raise FileNotFoundError(f'Could not find file "{file_path}"')
+                raise FileNotFoundError(f'Could not find file {file_path}')
 
         with open(file_path) as file:
             try:
@@ -485,6 +485,8 @@ class ConfigLoader:
 
     def load_directory(self, directory_path: Path, priority: Optional[int] = None):
         """Load all files ending with .yaml from a directory."""
+        if not directory_path.is_dir():
+            raise NotADirectoryError(f"{directory_path} is not a directory.")
         for file_path in sorted(directory_path.glob("*.yaml")):
             self.load_file(file_path, priority)
 
