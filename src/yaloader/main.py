@@ -44,7 +44,7 @@ class YAMLConfigLoader(yaml.SafeLoader):
         tag = config_class.get_yaml_tag()
         if tag.startswith('!!'):
             raise RuntimeError(
-                f"The tag {tag} has the prefix !! and can not be used by {full_object_name(config_class)}. "
+                f"The tag {tag} has the prefix !! and can therefore not be used by {full_object_name(config_class)}. "
                 f"Choose another tag for the yaml config class."
             )
 
