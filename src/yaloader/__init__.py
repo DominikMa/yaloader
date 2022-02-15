@@ -8,7 +8,7 @@ from yaloader.main import (
     loads
 )
 
-VERSION = '0.0.1'
+VERSION = '0.0.2'
 
 __all__ = [
     'VERSION',
