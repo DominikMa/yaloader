@@ -11,16 +11,9 @@ The configuration files can be layered to build hierarchical configurations.
    getting-started
 
 
+
 .. toctree::
    :maxdepth: 1
    :caption: Python API
 
    yaloader
-
-
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
