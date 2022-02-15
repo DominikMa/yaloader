@@ -1,32 +1,47 @@
 import pytest
 
-from src.yaloader import YAMLBaseConfig
+from yaloader import YAMLBaseConfig
+from yaloader.utils import full_object_name
 
 
 @pytest.fixture
-def simple_base_class(empty_yaml_loader):
+def BConfig(yaml_loader, AConfig):
 
-    class AConfig(YAMLBaseConfig, yaml_loader=empty_yaml_loader):
-        attribute_int: int = 0
-
-        def load(self, *args, **kwargs):
-            pass
-
-    return AConfig
-
-
-@pytest.fixture
-def simple_sub_class(simple_base_class, empty_yaml_loader):
-
-    class BConfig(simple_base_class, overwrite_tag=True, yaml_loader=empty_yaml_loader):
+    class Config(AConfig, overwrite_tag=True, yaml_loader=yaml_loader):
         _yaml_tag = "!A"
 
-        def load(self, *args, **kwargs):
-            pass
-
-    return BConfig
+    return Config
 
 
-def test_loading_subclass(simple_sub_class, empty_config_loader):
-    config = empty_config_loader.deep_construct_from_config(simple_sub_class(), final=True)
-    assert isinstance(config, simple_sub_class)
+def test_loading_subclass(config_loader, AConfig, BConfig):
+    config = config_loader.deep_construct_from_config(BConfig(), final=True)
+    assert type(config) != AConfig
+    assert type(config) == BConfig
+
+
+def test_error_on_standard_tag(yaml_loader):
+
+    with pytest.raises(RuntimeError) as error:
+        class Config(YAMLBaseConfig, yaml_loader=yaml_loader):
+            _yaml_tag = "!!str"
+
+    assert str(error.value).startswith(f"The tag !!str has the prefix !! and can therefore not be used")
+
+
+def test_error_on_existing_tag(yaml_loader):
+    yaml_loader.add_constructor('!A', lambda _: None)
+
+    with pytest.raises(RuntimeError) as error:
+        class Config(YAMLBaseConfig, yaml_loader=yaml_loader):
+            _yaml_tag = "!A"
+
+    assert str(error.value).startswith(f"The tag !A is already registered and can not be used")
+
+
+def test_error_on_registered_tag(yaml_loader, AConfig):
+
+    with pytest.raises(RuntimeError) as error:
+        class Config(YAMLBaseConfig, overwrite_tag=False, yaml_loader=yaml_loader):
+            _yaml_tag = "!A"
+
+    assert str(error.value).startswith(f"The tag !A is already registered by {full_object_name(AConfig)}")

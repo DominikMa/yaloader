@@ -1,10 +1,10 @@
 import pytest
 
-from yaloader import YAMLConfigLoader, ConfigLoader
+from yaloader import YAMLConfigLoader, ConfigLoader, YAMLBaseConfig
 
 
 @pytest.fixture
-def empty_yaml_loader():
+def yaml_loader():
     class EmptyYAMLConfigLoader(YAMLConfigLoader):
         pass
 
@@ -12,6 +12,19 @@ def empty_yaml_loader():
 
 
 @pytest.fixture
-def empty_config_loader(empty_yaml_loader):
-    config_loader = ConfigLoader(yaml_loader=empty_yaml_loader)
+def config_loader(yaml_loader):
+    config_loader = ConfigLoader(yaml_loader=yaml_loader)
     return config_loader
+
+
+@pytest.fixture
+def AConfig(yaml_loader, config_loader):
+
+    class Config(YAMLBaseConfig, yaml_loader=yaml_loader):
+        _yaml_tag = '!A'
+        attribute: int = 0
+
+        def load(self, *args, **kwargs):
+            return self.attribute
+
+    return Config
