@@ -42,6 +42,12 @@ class YAMLConfigLoader(yaml.SafeLoader):
         :return:
         """
         tag = config_class.get_yaml_tag()
+        if tag.startswith('!!'):
+            raise RuntimeError(
+                f"The tag {tag} has the prefix !! and can not be used by {full_object_name(config_class)}. "
+                f"Choose another tag for the yaml config class."
+            )
+
         if tag in cls.yaml_constructors.keys():
             # If tag is not in the registered yaml config classes,
             # it is a tag of the SafeLoader and should not be overwritten.
@@ -101,7 +107,6 @@ class YAMLConfigMetaclass(ModelMetaclass):
         def constructor(loader: YAMLConfigLoader, node: yaml.MappingNode) -> YAMLBaseConfig:
             """Construct the config object from a mapping."""
             if not isinstance(node, yaml.MappingNode):
-                # TODO: Add a test
                 raise ParserError(f"While parsing the configuration for the tag {node.tag}", node.start_mark,
                                   f"expected a mapping node, but found {node.id}")
             # Get the mapping in a dictionary
@@ -152,7 +157,6 @@ def loads(loaded_class: Type) -> Callable[[Type[YAMLBaseConfig]], Type[YAMLBaseC
     :return: The class decorator
     """
     def decorate(cls: Type[YAMLBaseConfig]):
-        # TODO: Test functools decorator
         @functools.wraps(cls.load)
         def load(self, *args, **kwargs):
             return loaded_class(**dict(self))
@@ -202,13 +206,13 @@ class YAMLBaseConfig(BaseModel, metaclass=YAMLConfigMetaclass):
             # Set yaml tag to default case: class name without `Config` suffix
             class_name = cls.__name__
             if not class_name.endswith("Config"):
-                raise RuntimeError(f"Config class {cls.__name__} has not yaml tag."
+                raise RuntimeError(f"Config class {cls.__name__} has not yaml tag. "
                                    f"If the tag should be derived automatically the "
                                    f"class name has to end with `Config`")
             class_name = class_name.removesuffix("Config")
             yaml_tag = f"!{class_name}"
         elif not yaml_tag.startswith("!"):
-            raise RuntimeError(f"The tag of config class {full_object_name(cls)} does not start with '!'.")
+            raise RuntimeError(f"The tag of config class {full_object_name(cls)} does not start with !")
         setattr(cls, f"_{cls.__name__}__yaml_tag", yaml_tag)
 
     def validate_config(self, force_all: bool = False) -> None:
