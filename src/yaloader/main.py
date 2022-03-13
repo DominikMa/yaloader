@@ -4,6 +4,7 @@ import datetime
 import functools
 import logging
 import textwrap
+import warnings
 from inspect import isclass
 from pathlib import PosixPath, Path
 from typing import Dict, Tuple, Set, Iterator, Type, Union, List, Optional, Any, Callable
@@ -94,15 +95,21 @@ class YAMLConfigDumper(yaml.SafeDumper):
 class YAMLConfigMetaclass(ModelMetaclass):
     """Metaclass for the BaseConfig to automagically add constructor and representer to the loader and dumper."""
 
-    def __init__(cls: Type[YAMLBaseConfig], name, bases, attrs, overwrite_tag: bool = False,
+    def __init__(cls: Type[YAMLBaseConfig], name, bases, attrs,
+                 loaded_class: Optional[Type] = None, overwrite_tag: bool = False,
                  yaml_loader: Type[YAMLConfigLoader] = YAMLConfigLoader,
-                 yaml_dumper: Type[YAMLConfigDumper] = YAMLConfigDumper, **kwargs):
+                 yaml_dumper: Type[YAMLConfigDumper] = YAMLConfigDumper,
+                 **kwargs):
         cls: Type[YAMLBaseConfig]  # For the IDE
         super(YAMLConfigMetaclass, cls).__init__(name, bases, attrs, **kwargs)
 
         # If there is an explict yaml tag given use it
         if '_yaml_tag' in attrs:
             cls.set_yaml_tag(attrs['_yaml_tag'])
+
+        # Set the _loaded_class attribute
+        if loaded_class is not None:
+            setattr(cls, "_loaded_class", loaded_class)
 
         def constructor(loader: YAMLConfigLoader, node: yaml.MappingNode) -> YAMLBaseConfig:
             """Construct the config object from a mapping."""
@@ -156,6 +163,8 @@ def loads(loaded_class: Type) -> Callable[[Type[YAMLBaseConfig]], Type[YAMLBaseC
     :param loaded_class: The class which should be loaded by this
     :return: The class decorator
     """
+    warnings.warn('The loads decorator will be deprecated. '
+                  'Use the Metaclass argument loaded_class instead.', DeprecationWarning, stacklevel=2)
     def decorate(cls: Type[YAMLBaseConfig]):
         @functools.wraps(cls.load)
         def load(self, *args, **kwargs):
@@ -172,6 +181,9 @@ class YAMLBaseConfig(BaseModel, metaclass=YAMLConfigMetaclass):
     Each config from which an actual object can be created has to implement
     the :meth:`YAMLBaseConfig.load()` method.
     """
+    _loaded_class: Optional[Type] = None
+    """The class which is loaded by the configuration. 
+    Can be None if the loaded class is explicitly specified in the load method."""
 
     class Config:
         """Since yaml configs are used to create instances extra fields are forbidden."""
@@ -235,11 +247,15 @@ class YAMLBaseConfig(BaseModel, metaclass=YAMLConfigMetaclass):
     def load(self, *args, **kwargs):
         """Create the object the yaml config object is for.
 
-        Should be overwritten in sub classes.
+        This basic constructor uses all attributes of the config as kwargs for the loaded class.
         """
+        if hasattr(self, '_loaded_class') and self._loaded_class is not None:
+            return self._loaded_class(**dict(self))
         raise NotImplementedError
 
     def __init_subclass__(cls, **kwargs):
+        if 'loaded_class' in kwargs:
+            kwargs.pop('loaded_class')
         if 'overwrite_tag' in kwargs:
             kwargs.pop('overwrite_tag')
         if 'yaml_loader' in kwargs:
