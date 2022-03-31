@@ -18,5 +18,4 @@ __all__ = [
     'YAMLConfigMetaclass',
     'YAMLBaseConfig',
     'ConfigLoader',
-    'loads',
 ]
