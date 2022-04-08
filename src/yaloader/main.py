@@ -6,7 +6,7 @@ import logging
 import textwrap
 import warnings
 from inspect import isclass
-from pathlib import PosixPath, Path
+from pathlib import PosixPath, WindowsPath, Path
 from typing import Dict, Tuple, Set, Iterator, Type, Union, List, Optional, Any, Callable
 
 import yaml
@@ -92,6 +92,28 @@ class YAMLConfigDumper(yaml.SafeDumper):
     See https://pydantic-docs.helpmanual.io/usage/exporting_models/ for details."""
 
 
+def representer_posix_path(dumper: YAMLConfigDumper, data: PosixPath):
+    return dumper.represent_str(str(data.absolute()))
+
+
+def representer_windows_path(dumper: YAMLConfigDumper, data: WindowsPath):
+    return dumper.represent_str(str(data.absolute()))
+
+
+def representer_timedelta(dumper: YAMLConfigDumper, data: datetime.timedelta):
+    return dumper.represent_str(str(data))
+
+
+def representer_base_model(dumper: YAMLConfigDumper, data: BaseModel):
+    return dumper.represent_dict(data.dict())
+
+
+yaml.add_representer(PosixPath, representer_posix_path, Dumper=YAMLConfigDumper)
+yaml.add_representer(WindowsPath, representer_windows_path, Dumper=YAMLConfigDumper)
+yaml.add_representer(datetime.timedelta, representer_timedelta, Dumper=YAMLConfigDumper)
+yaml.add_multi_representer(BaseModel, representer_base_model, Dumper=YAMLConfigDumper)
+
+
 class YAMLConfigMetaclass(ModelMetaclass):
     """Metaclass for the BaseConfig to automagically add constructor and representer to the loader and dumper."""
 
@@ -165,6 +187,7 @@ def loads(loaded_class: Type) -> Callable[[Type[YAMLBaseConfig]], Type[YAMLBaseC
     """
     warnings.warn('The loads decorator will be deprecated. '
                   'Use the Metaclass argument loaded_class instead.', DeprecationWarning, stacklevel=2)
+
     def decorate(cls: Type[YAMLBaseConfig]):
         @functools.wraps(cls.load)
         def load(self, *args, **kwargs):
