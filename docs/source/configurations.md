@@ -28,43 +28,12 @@ setattr(
 )
 ```
 
-Getting started
+Configurations
 =======================================
 
-Overview
----------------------------------------
-
-YaLoader is a YAML configuration system and loader which allows you to load different configurations 
-from multiple sources and merge them into a single configuration while taking priority, correctness, hierarchy and 
-inheritance into account. A configuration can be specified for any python object.
-
-Using YaLoader can be divided into three steps:
-defining possible configurations, 
-loading YAML files or strings holding configuration information, and
-constructing the final configuration for. 
 
 Installation
 ---------------------------------------
-
-YaLoader is distributed over [PyPI](https://pypi.org/project/yaloader/), so
-```bash
-pip install yaloader
-```
-is all you need.
-
-````{tip}
-If you want to build the docs or run the tests, you can use
-```bash
-pip install yaloader[docs,tests]
-```
-to install the additional needed dependencies. 
-
-````
-
-
-Defining possible configurations
----------------------------------------
-
 
 
 Basic Examples

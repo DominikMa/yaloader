@@ -8,7 +8,7 @@ from yaloader.main import (
     loads
 )
 
-VERSION = '0.0.2'
+VERSION = '0.0.3'
 
 __all__ = [
     'VERSION',
@@ -18,5 +18,4 @@ __all__ = [
     'YAMLConfigMetaclass',
     'YAMLBaseConfig',
     'ConfigLoader',
-    'loads',
 ]

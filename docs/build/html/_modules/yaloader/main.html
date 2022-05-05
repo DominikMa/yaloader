@@ -5,7 +5,7 @@
     <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../genindex.html" /><link rel="search" title="Search" href="../../search.html" />
 
     <meta name="generator" content="sphinx-4.4.0, furo 2022.01.02"/>
-        <title>yaloader.main - yaloader - YAML Configuration Loader 0.0.2 documentation</title>
+        <title>yaloader.main - yaloader - YAML Configuration Loader 0.0.4 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../_static/pygments.css" />
     <link rel="stylesheet" type="text/css" href="../../_static/styles/furo.css?digest=df49af52631e7917044a9c21a57f7b83170a6dd0" />
     <link rel="stylesheet" type="text/css" href="../../_static/autodoc_pydantic.css" />
@@ -125,7 +125,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../index.html"><div class="brand">yaloader - YAML Configuration Loader  0.0.2 documentation</div></a>
+      <a href="../../index.html"><div class="brand">yaloader - YAML Configuration Loader  0.0.4 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -148,7 +148,7 @@
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../../index.html">
   
   
-  <span class="sidebar-brand-text">yaloader - YAML Configuration Loader  0.0.2 documentation</span>
+  <span class="sidebar-brand-text">yaloader - YAML Configuration Loader  0.0.4 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../../search.html" role="search">
   <input class="sidebar-search" placeholder=Search name="q" aria-label="Search">
@@ -157,7 +157,11 @@
 </form>
 <div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
   <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../overview.html">Overview</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../getting-started.html">Getting started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../configurations.html">Configurations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../loading-multiple-configurations.html">Loading multiple configurations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../configuration-inheritance.html">Configuration inheritance</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Python API</span></p>
 <ul>
@@ -195,8 +199,9 @@
 <span class="kn">import</span> <span class="nn">functools</span>
 <span class="kn">import</span> <span class="nn">logging</span>
 <span class="kn">import</span> <span class="nn">textwrap</span>
+<span class="kn">import</span> <span class="nn">warnings</span>
 <span class="kn">from</span> <span class="nn">inspect</span> <span class="kn">import</span> <span class="n">isclass</span>
-<span class="kn">from</span> <span class="nn">pathlib</span> <span class="kn">import</span> <span class="n">PosixPath</span><span class="p">,</span> <span class="n">Path</span>
+<span class="kn">from</span> <span class="nn">pathlib</span> <span class="kn">import</span> <span class="n">PosixPath</span><span class="p">,</span> <span class="n">WindowsPath</span><span class="p">,</span> <span class="n">Path</span>
 <span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Set</span><span class="p">,</span> <span class="n">Iterator</span><span class="p">,</span> <span class="n">Type</span><span class="p">,</span> <span class="n">Union</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Callable</span>
 
 <span class="kn">import</span> <span class="nn">yaml</span>
@@ -282,18 +287,46 @@
 <span class="sd">    See https://pydantic-docs.helpmanual.io/usage/exporting_models/ for details."""</span></div>
 
 
+<span class="k">def</span> <span class="nf">representer_posix_path</span><span class="p">(</span><span class="n">dumper</span><span class="p">:</span> <span class="n">YAMLConfigDumper</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">PosixPath</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">dumper</span><span class="o">.</span><span class="n">represent_str</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">absolute</span><span class="p">()))</span>
+
+
+<span class="k">def</span> <span class="nf">representer_windows_path</span><span class="p">(</span><span class="n">dumper</span><span class="p">:</span> <span class="n">YAMLConfigDumper</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">WindowsPath</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">dumper</span><span class="o">.</span><span class="n">represent_str</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">absolute</span><span class="p">()))</span>
+
+
+<span class="k">def</span> <span class="nf">representer_timedelta</span><span class="p">(</span><span class="n">dumper</span><span class="p">:</span> <span class="n">YAMLConfigDumper</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">datetime</span><span class="o">.</span><span class="n">timedelta</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">dumper</span><span class="o">.</span><span class="n">represent_str</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">data</span><span class="p">))</span>
+
+
+<span class="k">def</span> <span class="nf">representer_base_model</span><span class="p">(</span><span class="n">dumper</span><span class="p">:</span> <span class="n">YAMLConfigDumper</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">BaseModel</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">dumper</span><span class="o">.</span><span class="n">represent_dict</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">dict</span><span class="p">())</span>
+
+
+<span class="n">yaml</span><span class="o">.</span><span class="n">add_representer</span><span class="p">(</span><span class="n">PosixPath</span><span class="p">,</span> <span class="n">representer_posix_path</span><span class="p">,</span> <span class="n">Dumper</span><span class="o">=</span><span class="n">YAMLConfigDumper</span><span class="p">)</span>
+<span class="n">yaml</span><span class="o">.</span><span class="n">add_representer</span><span class="p">(</span><span class="n">WindowsPath</span><span class="p">,</span> <span class="n">representer_windows_path</span><span class="p">,</span> <span class="n">Dumper</span><span class="o">=</span><span class="n">YAMLConfigDumper</span><span class="p">)</span>
+<span class="n">yaml</span><span class="o">.</span><span class="n">add_representer</span><span class="p">(</span><span class="n">datetime</span><span class="o">.</span><span class="n">timedelta</span><span class="p">,</span> <span class="n">representer_timedelta</span><span class="p">,</span> <span class="n">Dumper</span><span class="o">=</span><span class="n">YAMLConfigDumper</span><span class="p">)</span>
+<span class="n">yaml</span><span class="o">.</span><span class="n">add_multi_representer</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">,</span> <span class="n">representer_base_model</span><span class="p">,</span> <span class="n">Dumper</span><span class="o">=</span><span class="n">YAMLConfigDumper</span><span class="p">)</span>
+
+
 <div class="viewcode-block" id="YAMLConfigMetaclass"><a class="viewcode-back" href="../../generated/yaloader.YAMLConfigMetaclass.html#yaloader.YAMLConfigMetaclass">[docs]</a><span class="k">class</span> <span class="nc">YAMLConfigMetaclass</span><span class="p">(</span><span class="n">ModelMetaclass</span><span class="p">):</span>
     <span class="sd">"""Metaclass for the BaseConfig to automagically add constructor and representer to the loader and dumper."""</span>
 
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">cls</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="n">YAMLBaseConfig</span><span class="p">],</span> <span class="n">name</span><span class="p">,</span> <span class="n">bases</span><span class="p">,</span> <span class="n">attrs</span><span class="p">,</span> <span class="n">overwrite_tag</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">cls</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="n">YAMLBaseConfig</span><span class="p">],</span> <span class="n">name</span><span class="p">,</span> <span class="n">bases</span><span class="p">,</span> <span class="n">attrs</span><span class="p">,</span>
+                 <span class="n">loaded_class</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Type</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">overwrite_tag</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
                  <span class="n">yaml_loader</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="n">YAMLConfigLoader</span><span class="p">]</span> <span class="o">=</span> <span class="n">YAMLConfigLoader</span><span class="p">,</span>
-                 <span class="n">yaml_dumper</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="n">YAMLConfigDumper</span><span class="p">]</span> <span class="o">=</span> <span class="n">YAMLConfigDumper</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+                 <span class="n">yaml_dumper</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="n">YAMLConfigDumper</span><span class="p">]</span> <span class="o">=</span> <span class="n">YAMLConfigDumper</span><span class="p">,</span>
+                 <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
         <span class="bp">cls</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="n">YAMLBaseConfig</span><span class="p">]</span>  <span class="c1"># For the IDE</span>
         <span class="nb">super</span><span class="p">(</span><span class="n">YAMLConfigMetaclass</span><span class="p">,</span> <span class="bp">cls</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">bases</span><span class="p">,</span> <span class="n">attrs</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
 
         <span class="c1"># If there is an explict yaml tag given use it</span>
         <span class="k">if</span> <span class="s1">'_yaml_tag'</span> <span class="ow">in</span> <span class="n">attrs</span><span class="p">:</span>
             <span class="bp">cls</span><span class="o">.</span><span class="n">set_yaml_tag</span><span class="p">(</span><span class="n">attrs</span><span class="p">[</span><span class="s1">'_yaml_tag'</span><span class="p">])</span>
+
+        <span class="c1"># Set the _loaded_class attribute</span>
+        <span class="k">if</span> <span class="n">loaded_class</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="nb">setattr</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="s2">"_loaded_class"</span><span class="p">,</span> <span class="n">loaded_class</span><span class="p">)</span>
 
         <span class="k">def</span> <span class="nf">constructor</span><span class="p">(</span><span class="n">loader</span><span class="p">:</span> <span class="n">YAMLConfigLoader</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">yaml</span><span class="o">.</span><span class="n">MappingNode</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">YAMLBaseConfig</span><span class="p">:</span>
             <span class="sd">"""Construct the config object from a mapping."""</span>
@@ -347,6 +380,9 @@
 <span class="sd">    :param loaded_class: The class which should be loaded by this</span>
 <span class="sd">    :return: The class decorator</span>
 <span class="sd">    """</span>
+    <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s1">'The loads decorator will be deprecated. '</span>
+                  <span class="s1">'Use the Metaclass argument loaded_class instead.'</span><span class="p">,</span> <span class="ne">DeprecationWarning</span><span class="p">,</span> <span class="n">stacklevel</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+
     <span class="k">def</span> <span class="nf">decorate</span><span class="p">(</span><span class="bp">cls</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="n">YAMLBaseConfig</span><span class="p">]):</span>
         <span class="nd">@functools</span><span class="o">.</span><span class="n">wraps</span><span class="p">(</span><span class="bp">cls</span><span class="o">.</span><span class="n">load</span><span class="p">)</span>
         <span class="k">def</span> <span class="nf">load</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
@@ -363,6 +399,9 @@
 <span class="sd">    Each config from which an actual object can be created has to implement</span>
 <span class="sd">    the :meth:`YAMLBaseConfig.load()` method.</span>
 <span class="sd">    """</span>
+    <span class="n">_loaded_class</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Type</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="sd">"""The class which is loaded by the configuration. </span>
+<span class="sd">    Can be None if the loaded class is explicitly specified in the load method."""</span>
 
     <span class="k">class</span> <span class="nc">Config</span><span class="p">:</span>
         <span class="sd">"""Since yaml configs are used to create instances extra fields are forbidden."""</span>
@@ -426,11 +465,15 @@
 <div class="viewcode-block" id="YAMLBaseConfig.load"><a class="viewcode-back" href="../../generated/yaloader.YAMLBaseConfig.html#yaloader.YAMLBaseConfig.load">[docs]</a>    <span class="k">def</span> <span class="nf">load</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
         <span class="sd">"""Create the object the yaml config object is for.</span>
 
-<span class="sd">        Should be overwritten in sub classes.</span>
+<span class="sd">        This basic constructor uses all attributes of the config as kwargs for the loaded class.</span>
 <span class="sd">        """</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s1">'_loaded_class'</span><span class="p">)</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_loaded_class</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_loaded_class</span><span class="p">(</span><span class="o">**</span><span class="nb">dict</span><span class="p">(</span><span class="bp">self</span><span class="p">))</span>
         <span class="k">raise</span> <span class="ne">NotImplementedError</span></div>
 
     <span class="k">def</span> <span class="nf">__init_subclass__</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">if</span> <span class="s1">'loaded_class'</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
+            <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">'loaded_class'</span><span class="p">)</span>
         <span class="k">if</span> <span class="s1">'overwrite_tag'</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
             <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">'overwrite_tag'</span><span class="p">)</span>
         <span class="k">if</span> <span class="s1">'yaml_loader'</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
@@ -443,7 +486,7 @@
 <span class="k">class</span> <span class="nc">ConfigWithPriority</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
     <span class="sd">"""Keep a loaded yaml config class together with its priority."""</span>
     <span class="n">config</span><span class="p">:</span> <span class="n">YAMLBaseConfig</span>
-    <span class="n">priority</span><span class="p">:</span> <span class="n">conint</span><span class="p">(</span><span class="n">ge</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">priority</span><span class="p">:</span> <span class="n">conint</span><span class="p">(</span><span class="n">ge</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">le</span><span class="o">=</span><span class="mi">100</span><span class="p">)</span> <span class="o">=</span> <span class="mi">0</span>
 
 
 <div class="viewcode-block" id="ConfigLoader"><a class="viewcode-back" href="../../generated/yaloader.ConfigLoader.html#yaloader.ConfigLoader">[docs]</a><span class="k">class</span> <span class="nc">ConfigLoader</span><span class="p">:</span>
