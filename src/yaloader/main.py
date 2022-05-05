@@ -519,7 +519,13 @@ class ConfigLoader:
             else:
                 raise FileNotFoundError(f'Could not find file {file_path}')
 
-        self.load_string(file_path.read_text(encoding='utf-8'), priority=priority)
+        with open(file_path) as file:
+            try:
+                config_data: List = yaml.load_all(file, Loader=self.yaml_loader)
+                # pyyaml lazy loads, so file needs to stay open
+                self.add_config_data(config_data, priority)
+            except (ParserError, ConstructorError) as e:
+                raise e
 
     def load_directory(self, directory_path: Path, priority: Optional[int] = None):
         """Load all files ending with .yaml from a directory."""
