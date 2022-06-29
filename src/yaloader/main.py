@@ -114,13 +114,112 @@ yaml.add_representer(datetime.timedelta, representer_timedelta, Dumper=YAMLConfi
 yaml.add_multi_representer(BaseModel, representer_base_model, Dumper=YAMLConfigDumper)
 
 
+def get_constructor_for_class(cls: Type[YAMLBaseConfig]):
+
+    def constructor(loader: YAMLConfigLoader, node: yaml.MappingNode) -> YAMLBaseConfig:
+        """Construct the config object from a mapping."""
+        if not isinstance(node, yaml.MappingNode):
+            raise ParserError(f"While parsing the configuration for the tag {node.tag}", node.start_mark,
+                              f"expected a mapping node, but found {node.id}")
+        # Get the mapping in a dictionary
+        mapping = loader.construct_mapping(node, deep=True)
+        # Construct an object of this config class WITHOUT validating the inputs
+        config_instance: YAMLBaseConfig = cls.construct(**mapping)
+        # Validate the inputs, but ignore missing errors
+        try:
+            cls.validate_config(config_instance, force_all=False)
+        except ValidationError as e:
+            raise YAMLValueError(f"Could not validate the configuration for the tag {node.tag}", node.start_mark,
+                                 textwrap.indent(str(e), 2 * ' '))
+        return config_instance
+
+    return constructor
+
+
+def get_multi_constructor_for_vars(yaml_loader: Type[YAMLConfigLoader]):
+
+    def constructor(loader: YAMLConfigLoader, tag_suffix: str, node: yaml.MappingNode) -> YAMLBaseConfig:
+        """Construct the config object from a mapping."""
+        if not isinstance(node, yaml.MappingNode):
+            raise ParserError(f"While parsing the configuration for the tag {node.tag}", node.start_mark,
+                              f"expected a mapping node, but found {node.id}")
+        # Get the mapping in a dictionary
+        mapping = loader.construct_mapping(node, deep=True)
+
+        try:
+            tag = str(mapping.pop('_tag'))
+        except KeyError:
+            # TODO test
+            if node.tag in yaml_loader.yaml_config_classes:
+                tag = yaml_loader.yaml_config_classes[node.tag].__base__.get_yaml_tag()
+            else:
+                raise YAMLValueError(f"Could not load the configuration for variable with tag {node.tag}", node.start_mark,
+                                     f"_tag attribute is missing")
+        if tag not in yaml_loader.yaml_config_classes:
+            # TODO test
+            raise YAMLValueError(f"Could not load the configuration for variable with tag {node.tag}", node.start_mark,
+                                 f"_tag attribute is no registered config")
+
+        if node.tag in yaml_loader.yaml_config_classes:
+            # TODO test
+            if tag != yaml_loader.yaml_config_classes[node.tag].__base__.get_yaml_tag():
+                # TODO test
+                raise YAMLValueError(f"Could not load the configuration for variable with tag {node.tag}",
+                                     node.start_mark, f"variable with same tag already has another _tag attribute")
+            VarYAMLConfig = yaml_loader.yaml_config_classes[node.tag]
+        else:
+            BaseConfigCLS = yaml_loader.yaml_config_classes[tag]
+
+            class VarYAMLConfig(BaseConfigCLS, VarYAMLConfigBase, yaml_loader=None, yaml_dumper=None):
+                _yaml_tag = node.tag
+
+            yaml_loader.yaml_config_classes[node.tag] = VarYAMLConfig
+
+        # Construct an object of this config class WITHOUT validating the inputs
+        config_instance: YAMLBaseConfig = VarYAMLConfig.construct(**mapping)
+        # Validate the inputs, but ignore missing errors
+        try:
+            VarYAMLConfig.validate_config(config_instance, force_all=False)
+        except ValidationError as e:
+            raise YAMLValueError(f"Could not validate the configuration for the tag {node.tag}", node.start_mark,
+                                 textwrap.indent(str(e), 2 * ' '))
+        return config_instance
+
+    return constructor
+
+
+def get_representer_for_class(cls: Type[YAMLBaseConfig]):
+
+    def representer(dumper: YAMLConfigDumper, data: YAMLBaseConfig):
+        """Represent the config object as a mapping."""
+        # Get all keys which should be dumped
+        keys = set(data.dict(exclude_unset=dumper.exclude_unset, exclude_defaults=dumper.exclude_defaults).keys())
+
+        # Just for sorting the output:
+        # Get keys of iteration types
+        it_keys = set(filter(lambda k: isinstance(getattr(data, k), (list, tuple, dict)), keys))
+        keys = keys.difference(it_keys)
+
+        # Get keys of BaseConfig type
+        config_objects_keys = set(filter(lambda key: isinstance(getattr(data, key), YAMLBaseConfig), keys))
+        keys = keys.difference(config_objects_keys)
+
+        dump_dict = {k: getattr(data, k) for k in sorted(keys) + sorted(it_keys) + sorted(config_objects_keys)}
+        return dumper.represent_mapping(
+            cls.get_yaml_tag(),
+            dump_dict
+        )
+
+    return representer
+
+
 class YAMLConfigMetaclass(ModelMetaclass):
     """Metaclass for the BaseConfig to automagically add constructor and representer to the loader and dumper."""
 
     def __init__(cls: Type[YAMLBaseConfig], name, bases, attrs,
                  loaded_class: Optional[Type] = None, overwrite_tag: bool = False,
-                 yaml_loader: Type[YAMLConfigLoader] = YAMLConfigLoader,
-                 yaml_dumper: Type[YAMLConfigDumper] = YAMLConfigDumper,
+                 yaml_loader: Optional[Type[YAMLConfigLoader]] = YAMLConfigLoader,
+                 yaml_dumper: Optional[Type[YAMLConfigDumper]] = YAMLConfigDumper,
                  **kwargs):
         cls: Type[YAMLBaseConfig]  # For the IDE
         super(YAMLConfigMetaclass, cls).__init__(name, bases, attrs, **kwargs)
@@ -133,46 +232,10 @@ class YAMLConfigMetaclass(ModelMetaclass):
         if loaded_class is not None:
             setattr(cls, "_loaded_class", loaded_class)
 
-        def constructor(loader: YAMLConfigLoader, node: yaml.MappingNode) -> YAMLBaseConfig:
-            """Construct the config object from a mapping."""
-            if not isinstance(node, yaml.MappingNode):
-                raise ParserError(f"While parsing the configuration for the tag {node.tag}", node.start_mark,
-                                  f"expected a mapping node, but found {node.id}")
-            # Get the mapping in a dictionary
-            mapping = loader.construct_mapping(node, deep=True)
-            # Construct an object of this config class WITHOUT validating the inputs
-            config_instance: YAMLBaseConfig = cls.construct(**mapping)
-            # Validate the inputs, but ignore missing errors
-            try:
-                cls.validate_config(config_instance, force_all=False)
-            except ValidationError as e:
-                raise YAMLValueError(f"Could not validate the configuration for the tag {node.tag}", node.start_mark,
-                                     textwrap.indent(str(e), 2 * ' '))
-            return config_instance
-
-        yaml_loader.add_config_constructor(cls, constructor, overwrite_tag=overwrite_tag)
-
-        def representer(dumper: YAMLConfigDumper, data: YAMLBaseConfig):
-            """Represent the config object as a mapping."""
-            # Get all keys which should be dumped
-            keys = set(data.dict(exclude_unset=dumper.exclude_unset, exclude_defaults=dumper.exclude_defaults).keys())
-
-            # Just for sorting the output:
-            # Get keys of iteration types
-            it_keys = set(filter(lambda k: isinstance(getattr(data, k), (list, tuple, dict)), keys))
-            keys = keys.difference(it_keys)
-
-            # Get keys of BaseConfig type
-            config_objects_keys = set(filter(lambda key: isinstance(getattr(data, key), YAMLBaseConfig), keys))
-            keys = keys.difference(config_objects_keys)
-
-            dump_dict = {k: getattr(data, k) for k in sorted(keys) + sorted(it_keys) + sorted(config_objects_keys)}
-            return dumper.represent_mapping(
-                cls.get_yaml_tag(),
-                dump_dict
-            )
-
-        yaml_dumper.add_representer(cls, representer)
+        if yaml_loader is not None:
+            yaml_loader.add_config_constructor(cls, get_constructor_for_class(cls), overwrite_tag=overwrite_tag)
+        if yaml_dumper is not None:
+            yaml_dumper.add_representer(cls, get_representer_for_class(cls))
 
 
 def loads(loaded_class: Type) -> Callable[[Type[YAMLBaseConfig]], Type[YAMLBaseConfig]]:
@@ -196,6 +259,10 @@ def loads(loaded_class: Type) -> Callable[[Type[YAMLBaseConfig]], Type[YAMLBaseC
         setattr(cls, 'load', load)
         return cls
     return decorate
+
+
+class VarYAMLConfigBase:
+    pass
 
 
 class YAMLBaseConfig(BaseModel, metaclass=YAMLConfigMetaclass):
@@ -299,6 +366,7 @@ class ConfigLoader:
 
     def __init__(self, yaml_loader: Type[YAMLConfigLoader] = YAMLConfigLoader):
         self.yaml_loader = yaml_loader
+        self.yaml_loader.add_multi_constructor(tag_prefix='!ConfigVar', multi_constructor=get_multi_constructor_for_vars(yaml_loader))
 
         # All loaded yaml configs with their priorities per tag
         self.configs_per_tag: Dict[str, List[ConfigWithPriority]] = {}
@@ -369,7 +437,14 @@ class ConfigLoader:
         config_attributes = {}
         config_attributes.update(not_explict_config_attributes)
         config_attributes.update(explicit_configs_attributes)
-        constructed_config = config.construct(_fields_set=set(explicit_configs_attributes.keys()), **config_attributes)
+
+        # If the config is a variable construct using the base class
+        if isinstance(tag_config, VarYAMLConfigBase):
+            config_cls = tag_config.__class__.__base__
+        else:
+            config_cls = tag_config.__class__
+
+        constructed_config = config_cls.construct(_fields_set=set(explicit_configs_attributes.keys()), **config_attributes)
 
         constructed_config.validate_config(force_all=False)
         return constructed_config
