@@ -1,12 +1,14 @@
 import pytest
 
 from yaloader import YAMLValueError, YAMLBaseConfig
+import yaloader
 
 
 @pytest.fixture
 def MultiAttrConfig(yaml_loader, config_loader):
 
-    class Config(YAMLBaseConfig, yaml_loader=yaml_loader):
+    @yaloader.loads(yaml_loader=yaml_loader)
+    class Config(YAMLBaseConfig):
         _yaml_tag = '!MAC'
         attribute1: int = 0
         attribute2: int = 0
