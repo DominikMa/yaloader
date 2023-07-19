@@ -2,7 +2,6 @@ from yaloader.main import (
     YAMLValueError,
     YAMLConfigLoader,
     YAMLConfigDumper,
-    YAMLConfigMetaclass,
     YAMLBaseConfig,
     ConfigLoader,
     loads
@@ -15,7 +14,7 @@ __all__ = [
     'YAMLValueError',
     'YAMLConfigLoader',
     'YAMLConfigDumper',
-    'YAMLConfigMetaclass',
     'YAMLBaseConfig',
     'ConfigLoader',
+    'loads'
 ]
