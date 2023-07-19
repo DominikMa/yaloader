@@ -170,7 +170,8 @@ def get_multi_constructor_for_vars(yaml_loader: Type[YAMLConfigLoader]):
         else:
             BaseConfigCLS = yaml_loader.yaml_config_classes[tag]
 
-            class VarYAMLConfig(BaseConfigCLS, VarYAMLConfigBase, yaml_loader=None, yaml_dumper=None):
+            @loads(yaml_loader=None, yaml_dumper=None)
+            class VarYAMLConfig(BaseConfigCLS, VarYAMLConfigBase):
                 _yaml_tag = node.tag
 
             yaml_loader.yaml_config_classes[node.tag] = VarYAMLConfig
@@ -213,32 +214,12 @@ def get_representer_for_class(cls: Type[YAMLBaseConfig]):
     return representer
 
 
-class YAMLConfigMetaclass(ModelMetaclass):
-    """Metaclass for the BaseConfig to automagically add constructor and representer to the loader and dumper."""
-
-    def __init__(cls: Type[YAMLBaseConfig], name, bases, attrs,
-                 loaded_class: Optional[Type] = None, overwrite_tag: bool = False,
-                 yaml_loader: Optional[Type[YAMLConfigLoader]] = YAMLConfigLoader,
-                 yaml_dumper: Optional[Type[YAMLConfigDumper]] = YAMLConfigDumper,
-                 **kwargs):
-        cls: Type[YAMLBaseConfig]  # For the IDE
-        super(YAMLConfigMetaclass, cls).__init__(name, bases, attrs, **kwargs)
-
-        # If there is an explict yaml tag given use it
-        if '_yaml_tag' in attrs:
-            cls.set_yaml_tag(attrs['_yaml_tag'])
-
-        # Set the _loaded_class attribute
-        if loaded_class is not None:
-            setattr(cls, "_loaded_class", loaded_class)
-
-        if yaml_loader is not None:
-            yaml_loader.add_config_constructor(cls, get_constructor_for_class(cls), overwrite_tag=overwrite_tag)
-        if yaml_dumper is not None:
-            yaml_dumper.add_representer(cls, get_representer_for_class(cls))
-
-
-def loads(loaded_class: Type) -> Callable[[Type[YAMLBaseConfig]], Type[YAMLBaseConfig]]:
+def loads(
+    loaded_class: Optional[Type] = None,
+    overwrite_tag: bool = False,
+    yaml_loader: Optional[Type[YAMLConfigLoader]] = YAMLConfigLoader,
+    yaml_dumper: Optional[Type[YAMLConfigDumper]] = YAMLConfigDumper,
+) -> Callable[[Type[YAMLBaseConfig]], Type[YAMLBaseConfig]]:
     """A class decorator for yaml configs to add a simple load function for a given class.
 
     A load function, which gets all attributes of the config
@@ -248,16 +229,25 @@ def loads(loaded_class: Type) -> Callable[[Type[YAMLBaseConfig]], Type[YAMLBaseC
     :param loaded_class: The class which should be loaded by this
     :return: The class decorator
     """
-    warnings.warn('The loads decorator will be deprecated. '
-                  'Use the Metaclass argument loaded_class instead.', DeprecationWarning, stacklevel=2)
 
     def decorate(cls: Type[YAMLBaseConfig]):
-        @functools.wraps(cls.load)
-        def load(self, *args, **kwargs):
-            return loaded_class(**dict(self))
+        # If there is an explict yaml tag given use it
+        if hasattr(cls, "_yaml_tag"):
+            cls.set_yaml_tag(cls._yaml_tag)
 
-        setattr(cls, 'load', load)
+        # Set the _loaded_class attribute
+        if loaded_class is not None:
+            setattr(cls, "_loaded_class", loaded_class)
+
+        if yaml_loader is not None:
+            yaml_loader.add_config_constructor(
+                cls, get_constructor_for_class(cls), overwrite_tag=overwrite_tag
+            )
+        if yaml_dumper is not None:
+            yaml_dumper.add_representer(cls, get_representer_for_class(cls))
+
         return cls
+
     return decorate
 
 
@@ -265,7 +255,7 @@ class VarYAMLConfigBase:
     pass
 
 
-class YAMLBaseConfig(BaseModel, metaclass=YAMLConfigMetaclass):
+class YAMLBaseConfig(BaseModel):
     """The base class for all config objects which are loaded from or dumped to yaml files.
 
     Each config from which an actual object can be created has to implement
@@ -342,17 +332,6 @@ class YAMLBaseConfig(BaseModel, metaclass=YAMLConfigMetaclass):
         if hasattr(self, '_loaded_class') and self._loaded_class is not None:
             return self._loaded_class(**dict(self))
         raise NotImplementedError
-
-    def __init_subclass__(cls, **kwargs):
-        if 'loaded_class' in kwargs:
-            kwargs.pop('loaded_class')
-        if 'overwrite_tag' in kwargs:
-            kwargs.pop('overwrite_tag')
-        if 'yaml_loader' in kwargs:
-            kwargs.pop('yaml_loader')
-        if 'yaml_dumper' in kwargs:
-            kwargs.pop('yaml_dumper')
-        super().__init_subclass__(**kwargs)
 
 
 class ConfigWithPriority(BaseModel):
