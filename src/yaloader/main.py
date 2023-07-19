@@ -1,17 +1,25 @@
 from __future__ import annotations
 
 import datetime
-import functools
 import logging
 import textwrap
-import warnings
 from inspect import isclass
-from pathlib import PosixPath, WindowsPath, Path
-from typing import Dict, Tuple, Set, Iterator, Type, Union, List, Optional, Any, Callable
+from pathlib import Path, PosixPath, WindowsPath
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterator,
+    List,
+    Optional,
+    Set,
+    Tuple,
+    Type,
+    Union,
+)
 
 import yaml
 from pydantic import BaseModel, ValidationError, conint
-from pydantic.main import ModelMetaclass
 from yaml import MarkedYAMLError
 from yaml.constructor import ConstructorError
 from yaml.parser import ParserError
@@ -23,38 +31,46 @@ logger = logging.getLogger(__name__)
 
 class YAMLValueError(MarkedYAMLError):
     """Error of wrong values in the loaded yaml configs."""
-    pass
 
 
 class YAMLConfigLoader(yaml.SafeLoader):
     """YAML loader for the configs."""
+
     yaml_config_classes: Dict[str, Type[YAMLBaseConfig]] = {}
 
     @classmethod
-    def add_config_constructor(cls, config_class: Type[YAMLBaseConfig],
-                               constructor, overwrite_tag: bool = False) -> None:
+    def add_config_constructor(
+        cls,
+        config_class: Type[YAMLBaseConfig],
+        constructor,
+        overwrite_tag: bool = False,
+    ) -> None:
         """Add a yaml config class with its constructor to the loader.
 
         :param config_class: The config which should be added to the loader.
         :param constructor: The constructor to load the class.
-        :param overwrite_tag: If true and an other config with the same tag is already registered
-                              the previous config for the same tag is overwritten.
-                              Else a RuntimeError is raised if the tag of the config is already registered.
+        :param overwrite_tag: If true and an other config with the same tag is
+                              already registered the previous config for
+                              the same tag is overwritten.
+                              Else a RuntimeError is raised if the tag of
+                              the config is already registered.
         :return:
         """
         tag = config_class.get_yaml_tag()
-        if tag.startswith('!!'):
+        if tag.startswith("!!"):
             raise RuntimeError(
-                f"The tag {tag} has the prefix !! and can therefore not be used by {full_object_name(config_class)}. "
+                f"The tag {tag} has the prefix !! and can "
+                f"therefore not be used by {full_object_name(config_class)}. "
                 f"Choose another tag for the yaml config class."
             )
 
-        if tag in cls.yaml_constructors.keys():
+        if tag in cls.yaml_constructors:
             # If tag is not in the registered yaml config classes,
             # it is a tag of the SafeLoader and should not be overwritten.
             if tag not in cls.yaml_config_classes:
                 raise RuntimeError(
-                    f"The tag {tag} is already registered and can not be used by {full_object_name(config_class)}. "
+                    f"The tag {tag} is already registered and can not be used "
+                    f"by {full_object_name(config_class)}. "
                     f"Choose another tag for the yaml config class."
                 )
 
@@ -77,13 +93,14 @@ class YAMLConfigLoader(yaml.SafeLoader):
         cls.add_constructor(tag, constructor)
 
         # TODO: Not quite sure if this makes sense. Copied from the original yaml loader.
-        if 'yaml_config_classes' not in cls.__dict__:
+        if "yaml_config_classes" not in cls.__dict__:
             cls.yaml_config_classes = cls.yaml_config_classes.copy()
         cls.yaml_config_classes[tag] = config_class
 
 
 class YAMLConfigDumper(yaml.SafeDumper):
     """YAML dumper for the configs."""
+
     exclude_unset: bool = True
     """If True exclude all unset values when dumping the config. 
     See https://pydantic-docs.helpmanual.io/usage/exporting_models/ for details."""
@@ -115,12 +132,14 @@ yaml.add_multi_representer(BaseModel, representer_base_model, Dumper=YAMLConfigD
 
 
 def get_constructor_for_class(cls: Type[YAMLBaseConfig]):
-
     def constructor(loader: YAMLConfigLoader, node: yaml.MappingNode) -> YAMLBaseConfig:
         """Construct the config object from a mapping."""
         if not isinstance(node, yaml.MappingNode):
-            raise ParserError(f"While parsing the configuration for the tag {node.tag}", node.start_mark,
-                              f"expected a mapping node, but found {node.id}")
+            raise ParserError(
+                f"While parsing the configuration for the tag {node.tag}",
+                node.start_mark,
+                f"expected a mapping node, but found {node.id}",
+            )
         # Get the mapping in a dictionary
         mapping = loader.construct_mapping(node, deep=True)
         # Construct an object of this config class WITHOUT validating the inputs
@@ -128,44 +147,60 @@ def get_constructor_for_class(cls: Type[YAMLBaseConfig]):
         # Validate the inputs, but ignore missing errors
         try:
             cls.validate_config(config_instance, force_all=False)
-        except ValidationError as e:
-            raise YAMLValueError(f"Could not validate the configuration for the tag {node.tag}", node.start_mark,
-                                 textwrap.indent(str(e), 2 * ' '))
+        except ValidationError as error:
+            raise YAMLValueError(
+                f"Could not validate the configuration for the tag {node.tag}",
+                node.start_mark,
+                textwrap.indent(str(error), 2 * " "),
+            ) from error
         return config_instance
 
     return constructor
 
 
 def get_multi_constructor_for_vars(yaml_loader: Type[YAMLConfigLoader]):
-
-    def constructor(loader: YAMLConfigLoader, tag_suffix: str, node: yaml.MappingNode) -> YAMLBaseConfig:
+    def constructor(
+        loader: YAMLConfigLoader, tag_suffix: str, node: yaml.MappingNode
+    ) -> YAMLBaseConfig:
         """Construct the config object from a mapping."""
         if not isinstance(node, yaml.MappingNode):
-            raise ParserError(f"While parsing the configuration for the tag {node.tag}", node.start_mark,
-                              f"expected a mapping node, but found {node.id}")
+            raise ParserError(
+                f"While parsing the configuration for the tag {node.tag}",
+                node.start_mark,
+                f"expected a mapping node, but found {node.id}",
+            )
         # Get the mapping in a dictionary
         mapping = loader.construct_mapping(node, deep=True)
 
         try:
-            tag = str(mapping.pop('_tag'))
+            tag = str(mapping.pop("_tag"))
         except KeyError:
             # TODO test
             if node.tag in yaml_loader.yaml_config_classes:
                 tag = yaml_loader.yaml_config_classes[node.tag].__base__.get_yaml_tag()
             else:
-                raise YAMLValueError(f"Could not load the configuration for variable with tag {node.tag}", node.start_mark,
-                                     f"_tag attribute is missing")
+                raise YAMLValueError(
+                    f"Could not load the configuration for variable with tag {node.tag}",
+                    node.start_mark,
+                    f"_tag attribute is missing",
+                )
         if tag not in yaml_loader.yaml_config_classes:
             # TODO test
-            raise YAMLValueError(f"Could not load the configuration for variable with tag {node.tag}", node.start_mark,
-                                 f"_tag attribute is no registered config")
+            raise YAMLValueError(
+                f"Could not load the configuration for variable with tag {node.tag}",
+                node.start_mark,
+                f"_tag attribute is no registered config",
+            )
 
         if node.tag in yaml_loader.yaml_config_classes:
             # TODO test
             if tag != yaml_loader.yaml_config_classes[node.tag].__base__.get_yaml_tag():
                 # TODO test
-                raise YAMLValueError(f"Could not load the configuration for variable with tag {node.tag}",
-                                     node.start_mark, f"variable with same tag already has another _tag attribute")
+                raise YAMLValueError(
+                    f"Could not load the configuration for variable with tag {node.tag}",
+                    node.start_mark,
+                    f"variable with same tag already has another _tag attribute",
+                )
             VarYAMLConfig = yaml_loader.yaml_config_classes[node.tag]
         else:
             BaseConfigCLS = yaml_loader.yaml_config_classes[tag]
@@ -182,34 +217,45 @@ def get_multi_constructor_for_vars(yaml_loader: Type[YAMLConfigLoader]):
         try:
             VarYAMLConfig.validate_config(config_instance, force_all=False)
         except ValidationError as e:
-            raise YAMLValueError(f"Could not validate the configuration for the tag {node.tag}", node.start_mark,
-                                 textwrap.indent(str(e), 2 * ' '))
+            raise YAMLValueError(
+                f"Could not validate the configuration for the tag {node.tag}",
+                node.start_mark,
+                textwrap.indent(str(e), 2 * " "),
+            )
         return config_instance
 
     return constructor
 
 
 def get_representer_for_class(cls: Type[YAMLBaseConfig]):
-
     def representer(dumper: YAMLConfigDumper, data: YAMLBaseConfig):
         """Represent the config object as a mapping."""
         # Get all keys which should be dumped
-        keys = set(data.dict(exclude_unset=dumper.exclude_unset, exclude_defaults=dumper.exclude_defaults).keys())
+        keys = set(
+            data.dict(
+                exclude_unset=dumper.exclude_unset,
+                exclude_defaults=dumper.exclude_defaults,
+            ).keys()
+        )
 
         # Just for sorting the output:
         # Get keys of iteration types
-        it_keys = set(filter(lambda k: isinstance(getattr(data, k), (list, tuple, dict)), keys))
+        it_keys = set(
+            filter(lambda k: isinstance(getattr(data, k), (list, tuple, dict)), keys)
+        )
         keys = keys.difference(it_keys)
 
         # Get keys of BaseConfig type
-        config_objects_keys = set(filter(lambda key: isinstance(getattr(data, key), YAMLBaseConfig), keys))
+        config_objects_keys = set(
+            filter(lambda key: isinstance(getattr(data, key), YAMLBaseConfig), keys)
+        )
         keys = keys.difference(config_objects_keys)
 
-        dump_dict = {k: getattr(data, k) for k in sorted(keys) + sorted(it_keys) + sorted(config_objects_keys)}
-        return dumper.represent_mapping(
-            cls.get_yaml_tag(),
-            dump_dict
-        )
+        dump_dict = {
+            k: getattr(data, k)
+            for k in sorted(keys) + sorted(it_keys) + sorted(config_objects_keys)
+        }
+        return dumper.represent_mapping(cls.get_yaml_tag(), dump_dict)
 
     return representer
 
@@ -261,13 +307,15 @@ class YAMLBaseConfig(BaseModel):
     Each config from which an actual object can be created has to implement
     the :meth:`YAMLBaseConfig.load()` method.
     """
+
     _loaded_class: Optional[Type] = None
     """The class which is loaded by the configuration. 
     Can be None if the loaded class is explicitly specified in the load method."""
 
     class Config:
         """Since yaml configs are used to create instances extra fields are forbidden."""
-        extra = 'forbid'
+
+        extra = "forbid"
         validate_assignment = True
 
     @classmethod
@@ -289,7 +337,7 @@ class YAMLBaseConfig(BaseModel):
 
     @classmethod
     def _assure_has_yaml_tag(cls) -> None:
-        """ Assert that the config has a valid yaml tag.
+        """Assert that the config has a valid yaml tag.
 
         If the tag is not set yet, try to set it to a default value.
         """
@@ -298,13 +346,17 @@ class YAMLBaseConfig(BaseModel):
             # Set yaml tag to default case: class name without `Config` suffix
             class_name = cls.__name__
             if not class_name.endswith("Config"):
-                raise RuntimeError(f"Config class {cls.__name__} has not yaml tag. "
-                                   f"If the tag should be derived automatically the "
-                                   f"class name has to end with `Config`")
+                raise RuntimeError(
+                    f"Config class {cls.__name__} has not yaml tag. "
+                    f"If the tag should be derived automatically the "
+                    f"class name has to end with `Config`"
+                )
             class_name = class_name.removesuffix("Config")
             yaml_tag = f"!{class_name}"
         elif not yaml_tag.startswith("!"):
-            raise RuntimeError(f"The tag of config class {full_object_name(cls)} does not start with !")
+            raise RuntimeError(
+                f"The tag of config class {full_object_name(cls)} does not start with !"
+            )
         setattr(cls, f"_{cls.__name__}__yaml_tag", yaml_tag)
 
     def validate_config(self, force_all: bool = False) -> None:
@@ -329,13 +381,14 @@ class YAMLBaseConfig(BaseModel):
 
         This basic constructor uses all attributes of the config as kwargs for the loaded class.
         """
-        if hasattr(self, '_loaded_class') and self._loaded_class is not None:
+        if hasattr(self, "_loaded_class") and self._loaded_class is not None:
             return self._loaded_class(**dict(self))
         raise NotImplementedError
 
 
 class ConfigWithPriority(BaseModel):
     """Keep a loaded yaml config class together with its priority."""
+
     config: YAMLBaseConfig
     priority: conint(ge=0, le=100) = 0
 
@@ -345,12 +398,17 @@ class ConfigLoader:
 
     def __init__(self, yaml_loader: Type[YAMLConfigLoader] = YAMLConfigLoader):
         self.yaml_loader = yaml_loader
-        self.yaml_loader.add_multi_constructor(tag_prefix='!ConfigVar', multi_constructor=get_multi_constructor_for_vars(yaml_loader))
+        self.yaml_loader.add_multi_constructor(
+            tag_prefix="!ConfigVar",
+            multi_constructor=get_multi_constructor_for_vars(yaml_loader),
+        )
 
         # All loaded yaml configs with their priorities per tag
         self.configs_per_tag: Dict[str, List[ConfigWithPriority]] = {}
 
-    def deep_construct_from_config(self, config: Any, final: bool = False, auto_load: bool = False) -> Any:
+    def deep_construct_from_config(
+        self, config: Any, final: bool = False, auto_load: bool = False
+    ) -> Any:
         """Deeply construct the config based on a config object.
 
         :param config: The config which should be constructed
@@ -375,24 +433,33 @@ class ConfigLoader:
             return config.load()
         return config
 
-    def _deep_construct(self, v: Any, final: bool = False, auto_load: bool = False) -> Any:
+    def _deep_construct(
+        self, v: Any, final: bool = False, auto_load: bool = False
+    ) -> Any:
         # If v is another config just recursive call deep construct
         if isinstance(v, YAMLBaseConfig):
             return self.deep_construct_from_config(v, final=final, auto_load=auto_load)
         # If v is a list, tuple or dict recursively call this method for every item
         elif isinstance(v, List):
-            return list([self._deep_construct(e, final=final, auto_load=auto_load) for e in v])
+            return list(
+                [self._deep_construct(e, final=final, auto_load=auto_load) for e in v]
+            )
         elif isinstance(v, Tuple):
-            return tuple((self._deep_construct(e, final=final, auto_load=auto_load) for e in v))
+            return tuple(
+                (self._deep_construct(e, final=final, auto_load=auto_load) for e in v)
+            )
         elif isinstance(v, Dict):
-            return {k: self._deep_construct(e, final=final, auto_load=auto_load) for k, e in v.items()}
+            return {
+                k: self._deep_construct(e, final=final, auto_load=auto_load)
+                for k, e in v.items()
+            }
         # If v is an unhandled type log a warning and return v itself
-        elif v is not None and not isinstance(v, (
-                int, float, str,
-                PosixPath,
-                datetime.timedelta, datetime.datetime
-        )):
-            logger.warning(f'Got type {type(v)} while deep construct of a yaml config which is not explicitly handled.')
+        elif v is not None and not isinstance(
+            v, (int, float, str, PosixPath, datetime.timedelta, datetime.datetime)
+        ):
+            logger.warning(
+                f"Got type {type(v)} while deep construct of a yaml config which is not explicitly handled."
+            )
         return v
 
     def flat_construct_from_config(self, config: YAMLBaseConfig) -> YAMLBaseConfig:
@@ -406,11 +473,15 @@ class ConfigLoader:
 
         # Get the not explict configs attributes
         not_explict_config_attributes = {}
-        self.update_config_attributes(not_explict_config_attributes, [tag_config, config], explicit=False)
+        self.update_config_attributes(
+            not_explict_config_attributes, [tag_config, config], explicit=False
+        )
 
         # Get the explict configs attributes
         explicit_configs_attributes = {}
-        self.update_config_attributes(explicit_configs_attributes, [tag_config, config], explicit=True)
+        self.update_config_attributes(
+            explicit_configs_attributes, [tag_config, config], explicit=True
+        )
 
         # Update object from loaded config attributes with not explict and explict configs
         config_attributes = {}
@@ -423,7 +494,9 @@ class ConfigLoader:
         else:
             config_cls = tag_config.__class__
 
-        constructed_config = config_cls.construct(_fields_set=set(explicit_configs_attributes.keys()), **config_attributes)
+        constructed_config = config_cls.construct(
+            _fields_set=set(explicit_configs_attributes.keys()), **config_attributes
+        )
 
         constructed_config.validate_config(force_all=False)
         return constructed_config
@@ -447,65 +520,94 @@ class ConfigLoader:
         try:
             default_config = self.yaml_loader.yaml_config_classes[tag].construct()
         except KeyError as e:
-            raise RuntimeError(f"Can not load configs for {tag}! "
-                               f"It seems that no config is registered for that tag.") from e
+            raise RuntimeError(
+                f"Can not load configs for {tag}! "
+                f"It seems that no config is registered for that tag."
+            ) from e
 
-        configs_with_priority_for_tag = [ConfigWithPriority(config=default_config, priority=0)]
+        configs_with_priority_for_tag = [
+            ConfigWithPriority(config=default_config, priority=0)
+        ]
         configs_with_priority_for_tag += self.configs_per_tag.get(tag, [])
 
         # Sort pairs by priority (lowest first) and get the config
-        configs_with_priority_for_tag.sort(key=lambda configs_with_priority: configs_with_priority.priority)
-        configs_objects: List[YAMLBaseConfig] = list(map(lambda y: y.config, configs_with_priority_for_tag))
+        configs_with_priority_for_tag.sort(
+            key=lambda configs_with_priority: configs_with_priority.priority
+        )
+        configs_objects: List[YAMLBaseConfig] = list(
+            map(lambda y: y.config, configs_with_priority_for_tag)
+        )
 
         # Get the class of the config, make sure it is exactly one
-        configs_object_classes: Set[Type[YAMLBaseConfig]] = set(map(lambda o: o.__class__, configs_objects))
+        configs_object_classes: Set[Type[YAMLBaseConfig]] = set(
+            map(lambda o: o.__class__, configs_objects)
+        )
         if len(configs_object_classes) != 1:
-            raise RuntimeError(f"In the configs for the tag {tag} is more than one class.")
+            raise RuntimeError(
+                f"In the configs for the tag {tag} is more than one class."
+            )
         config_object_class = configs_object_classes.pop()
 
         # Get all config classes which it inherits from
         # noinspection PyTypeChecker
-        config_class_bases: Iterator[Type[YAMLBaseConfig]] = filter(lambda x: (isclass(x) and
-                                                                               issubclass(x, YAMLBaseConfig) and
-                                                                               not x == YAMLBaseConfig),
-                                                                    config_object_class.__bases__)
+        config_class_bases: Iterator[Type[YAMLBaseConfig]] = filter(
+            lambda x: (
+                isclass(x) and issubclass(x, YAMLBaseConfig) and not x == YAMLBaseConfig
+            ),
+            config_object_class.__bases__,
+        )
 
         # Construct all bases, in reversed order (first base has highest priority and should be at end of the list)
         # Construction MUST BE flat. Otherwise there might be circles.
-        constructed_config_bases: List[YAMLBaseConfig] = list(map(
-            lambda config_base: self.flat_construct_from_tag(config_base.get_yaml_tag()),
-            config_class_bases)
+        constructed_config_bases: List[YAMLBaseConfig] = list(
+            map(
+                lambda config_base: self.flat_construct_from_tag(
+                    config_base.get_yaml_tag()
+                ),
+                config_class_bases,
+            )
         )
         constructed_config_bases.reverse()
 
         # Construct not explict set config attributes
         not_explict_config_attributes = {}
         # Add all not explict set fields from the bases, starting with the most right base to left base
-        self.update_config_attributes(not_explict_config_attributes, constructed_config_bases, explicit=False)
+        self.update_config_attributes(
+            not_explict_config_attributes, constructed_config_bases, explicit=False
+        )
         # Add all not explict set fields from the loaded configs, starting with the lowest priority to the highest
-        self.update_config_attributes(not_explict_config_attributes, configs_objects, explicit=False)
+        self.update_config_attributes(
+            not_explict_config_attributes, configs_objects, explicit=False
+        )
 
         # Construct explict set config attributes
         explicit_config_attributes = {}
         # Add all explict set fields from the bases, starting with the most right base to left base
-        self.update_config_attributes(explicit_config_attributes, constructed_config_bases, explicit=True)
+        self.update_config_attributes(
+            explicit_config_attributes, constructed_config_bases, explicit=True
+        )
         # Add all explict set fields from the loaded configs, starting with the lowest priority to the highest
-        self.update_config_attributes(explicit_config_attributes, configs_objects, explicit=True)
+        self.update_config_attributes(
+            explicit_config_attributes, configs_objects, explicit=True
+        )
 
         # Overwrite not explict config attributes with explict ones
         config_attributes = {}
         config_attributes.update(not_explict_config_attributes)
         config_attributes.update(explicit_config_attributes)
         # Construct config object, set only fields from `explicit_config_attributes` to explict
-        constructed_config = config_object_class.construct(_fields_set=set(explicit_config_attributes.keys()),
-                                                           **config_attributes)
+        constructed_config = config_object_class.construct(
+            _fields_set=set(explicit_config_attributes.keys()), **config_attributes
+        )
 
         # Validate, but do not force all. Some base class might be not complete (and it don't has to)
         constructed_config.validate_config(force_all=False)
         return constructed_config
 
     @staticmethod
-    def update_config_attributes(config_attributes: dict, config_updates: List[YAMLBaseConfig], explicit: bool) -> None:
+    def update_config_attributes(
+        config_attributes: dict, config_updates: List[YAMLBaseConfig], explicit: bool
+    ) -> None:
         """Add config attributes from update configs to the current config attributes.
 
         If the field already exists overwrite it. So `config_updates` are lowest priority first.
@@ -516,8 +618,9 @@ class ConfigLoader:
         """
         for update in config_updates:
             update_dict = dict(update)
-            fields = filter(lambda f: (f in update.__fields_set__) == explicit,
-                            update_dict.keys())
+            fields = filter(
+                lambda f: (f in update.__fields_set__) == explicit, update_dict.keys()
+            )
             for field in fields:
                 config_attributes[field] = update_dict[field]
 
@@ -534,8 +637,10 @@ class ConfigLoader:
         """Add a yaml string with a single config object."""
         config: YAMLBaseConfig = yaml.load(string, Loader=self.yaml_loader)
         if not isinstance(config, YAMLBaseConfig):
-            string = string.replace('\n', '\n\t')
-            raise ValueError(f"The given string is not a registered config:\n\n\t{string}")
+            string = string.replace("\n", "\n\t")
+            raise ValueError(
+                f"The given string is not a registered config:\n\n\t{string}"
+            )
         config_with_priority = ConfigWithPriority(config=config, priority=priority)
         self.add_config(config_with_priority)
 
@@ -543,19 +648,25 @@ class ConfigLoader:
         """Add multiple configs or priorities."""
         given_priority = priority
         for config_element in config_data:
-            if isinstance(config_element, Dict) and 'priority' in config_element:
-                priority = config_element['priority'] if given_priority is None else given_priority
+            if isinstance(config_element, Dict) and "priority" in config_element:
+                priority = (
+                    config_element["priority"]
+                    if given_priority is None
+                    else given_priority
+                )
             elif isinstance(config_element, List):
                 for config in config_element:
                     if isinstance(config, YAMLBaseConfig):
                         config_with_priority = ConfigWithPriority(
                             config=config,
-                            priority=priority if priority is not None else 0
+                            priority=priority if priority is not None else 0,
                         )
                         self.add_config(config_with_priority)
             else:
-                raise ValueError(f"Entries in the config files must be mapping containing a priority key "
-                                 f"or a list of configs.")
+                raise ValueError(
+                    f"Entries in the config files must be mapping containing a priority key "
+                    f"or a list of configs."
+                )
 
     def load_string(self, string, priority: Optional[int] = None):
         """Load a yaml string including multiple configs or priorities."""
@@ -566,12 +677,12 @@ class ConfigLoader:
         self.add_config_data(config_data, priority)
 
     def load_file(self, file_path: Path, priority: Optional[int] = None):
-        """ Load a yaml file including multiple configs or priorities."""
+        """Load a yaml file including multiple configs or priorities."""
         if not file_path.is_file():
-            if file_path.with_suffix('.yaml').is_file():
-                file_path = file_path.with_suffix('.yaml')
+            if file_path.with_suffix(".yaml").is_file():
+                file_path = file_path.with_suffix(".yaml")
             else:
-                raise FileNotFoundError(f'Could not find file {file_path}')
+                raise FileNotFoundError(f"Could not find file {file_path}")
 
         with open(file_path) as file:
             try:
@@ -599,8 +710,8 @@ class ConfigLoader:
     def construct_from_file(self, file_path: Path, auto_load: bool = False):
         """Construct the configuration for a yaml file with a single yaml config."""
         if not file_path.is_file():
-            if file_path.with_suffix('.yaml').is_file():
-                file_path = file_path.with_suffix('.yaml')
+            if file_path.with_suffix(".yaml").is_file():
+                file_path = file_path.with_suffix(".yaml")
             else:
                 raise FileNotFoundError(f'Could not find file "{file_path}"')
         with open(file_path) as file:
