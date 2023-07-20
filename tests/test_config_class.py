@@ -2,14 +2,13 @@ import dataclasses
 
 import pytest
 
-from yaloader import YAMLBaseConfig
 import yaloader
-
+import yaloader.constructor
+from yaloader import YAMLBaseConfig
 
 
 def test_unset_tag(yaml_loader):
-
-    @yaloader.loads(yaml_loader=yaml_loader)
+    @yaloader.constructor.loads(yaml_loader=yaml_loader)
     class XYZConfig(YAMLBaseConfig):
         attribute: int = 0
 
@@ -17,8 +16,7 @@ def test_unset_tag(yaml_loader):
 
 
 def test_set_tag(yaml_loader):
-     
-    @yaloader.loads(yaml_loader=yaml_loader)
+    @yaloader.constructor.loads(yaml_loader=yaml_loader)
     class XYZConfig(YAMLBaseConfig):
         _yaml_tag = "!ABC"
         attribute: int = 0
@@ -28,7 +26,7 @@ def test_set_tag(yaml_loader):
 
 def test_raise_on_missing_tag(yaml_loader):
     with pytest.raises(RuntimeError) as error:
-        @yaloader.loads(yaml_loader=yaml_loader)
+        @yaloader.constructor.loads(yaml_loader=yaml_loader)
         class ConfigA(YAMLBaseConfig):
             attribute: int = 0
 
@@ -38,7 +36,7 @@ def test_raise_on_missing_tag(yaml_loader):
 
 def test_raise_on_wrong_tag_prefix(yaml_loader):
     with pytest.raises(RuntimeError) as error:
-        @yaloader.loads(yaml_loader=yaml_loader)
+        @yaloader.constructor.loads(yaml_loader=yaml_loader)
         class ConfigA(YAMLBaseConfig):
             _yaml_tag = "A"
             attribute: int = 0
@@ -51,7 +49,7 @@ def test_loaded_class_argument(yaml_loader, config_loader):
     class Class:
         attribute: int
 
-    @yaloader.loads(loaded_class=Class, yaml_loader=yaml_loader)
+    @yaloader.constructor.loads(loaded_class=Class, yaml_loader=yaml_loader)
     class ClassConfig(YAMLBaseConfig):
         attribute: int = 0
 
@@ -65,7 +63,7 @@ def test_loaded_class_argument_auto_load(yaml_loader, config_loader):
     class Class:
         attribute: int
 
-    @yaloader.loads(loaded_class=Class, yaml_loader=yaml_loader)
+    @yaloader.constructor.loads(loaded_class=Class, yaml_loader=yaml_loader)
     class ClassConfig(YAMLBaseConfig):
         attribute: int = 0
 
@@ -74,7 +72,7 @@ def test_loaded_class_argument_auto_load(yaml_loader, config_loader):
 
 
 def test_no_loaded_class_argument_raises(yaml_loader, config_loader):
-    @yaloader.loads(yaml_loader=yaml_loader)
+    @yaloader.constructor.loads(yaml_loader=yaml_loader)
     class ClassConfig(YAMLBaseConfig):
         attribute: int = 0
 

@@ -1,8 +1,7 @@
 import dataclasses
 
-import pytest
-
 import yaloader
+import yaloader.constructor
 from yaloader import YAMLBaseConfig
 
 
@@ -11,7 +10,7 @@ def test_loads_constructor(yaml_loader, config_loader):
     class Class:
         attribute: int
 
-    @yaloader.loads(loaded_class=Class, yaml_loader=yaml_loader)
+    @yaloader.constructor.loads(loaded_class=Class, yaml_loader=yaml_loader)
     class ClassConfig(YAMLBaseConfig):
         attribute: int = 0
 
@@ -25,7 +24,7 @@ def test_loads_constructor_auto_load(yaml_loader, config_loader):
     class Class:
         attribute: int
 
-    @yaloader.loads(loaded_class=Class, yaml_loader=yaml_loader)
+    @yaloader.constructor.loads(loaded_class=Class, yaml_loader=yaml_loader)
     class ClassConfig(YAMLBaseConfig):
         attribute: int = 0
 
