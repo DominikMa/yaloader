@@ -13,17 +13,20 @@ Base Modules
 
    YAMLConfigLoader
    YAMLConfigDumper
-   YAMLConfigMetaclass
+   YAMLValueError
    ConfigLoader
 
    .. autosummary::
     :toctree: generated
     :template: base.rst
     loads
+    get_constructor_for_class
+    get_multi_constructor_for_vars
 
    .. autosummary::
       :nosignatures:
-      :template: config-template.rst
+      :template: class-template.rst
+      VarYAMLConfigBase
       YAMLBaseConfig
 
 Utilities
@@ -36,3 +39,10 @@ From the ``yaloader.utils`` module
 
     full_object_name
     remove_missing_errors
+
+.. currentmodule:: yaloader
+.. autosummary::
+    :toctree: generated
+    :template: module-template.rst
+
+    representer
