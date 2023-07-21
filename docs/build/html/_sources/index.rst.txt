@@ -15,7 +15,6 @@ The configuration files can be layered to build hierarchical configurations.
    configuration-inheritance
 
 
-
 .. toctree::
    :maxdepth: 1
    :caption: Python API

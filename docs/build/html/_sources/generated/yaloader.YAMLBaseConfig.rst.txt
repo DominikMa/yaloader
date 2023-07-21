@@ -1,9 +1,10 @@
-﻿yaloader.YAMLBaseConfig
+﻿.. currentmodule:: yaloader
+
+yaloader.YAMLBaseConfig
 =======================
 
-.. currentmodule:: yaloader
 
-.. autopydantic_model:: YAMLBaseConfig
+.. autoclass:: YAMLBaseConfig
    :members:
    :show-inheritance:
-   :inherited-members: BaseModel
+

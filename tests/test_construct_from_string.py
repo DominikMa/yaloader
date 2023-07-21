@@ -40,3 +40,14 @@ def test_raise_on_additional_attribute(config_loader, AConfig):
 def test_raise_on_wrong_attribute_type(config_loader, AConfig):
     with pytest.raises(YAMLValueError) as error:
         config_loader.construct_from_string('!A {attribute: "Some text"}')
+
+
+def test_multi_load_list(config_loader, AConfig):
+    config_list = config_loader.construct_from_string(
+        """
+        - !A {attribute: 2}
+        - !A {attribute: 3}
+        - !ConfigVarABC {attribute: 1, _tag: "!A"}
+        """
+    )
+    assert config_list == [AConfig(attribute=2), AConfig(attribute=3), AConfig(attribute=1)]
