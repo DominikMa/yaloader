@@ -15,7 +15,7 @@ from yaloader.constructor import get_constructor_for_class, get_multi_constructo
 
 from yaloader.config_loader import ConfigLoader
 
-VERSION = '1.0.0'
+VERSION = '1.0.1'
 
 __all__ = [
     'VERSION',
