@@ -332,15 +332,15 @@ class ConfigLoader:
         for file_path in sorted(directory_path.glob("*.yaml")):
             self.load_file(file_path, priority)
 
-    def construct_from_string(self, string: str, auto_load: bool = False):
+    def construct_from_string(self, string: str, auto_load: bool = False, final: bool = True):
         """Construct the configuration for a yaml string with a single yaml config."""
         try:
             config: Any = yaml.load(string, Loader=self.yaml_loader)
         except (ParserError, ConstructorError) as e:
             raise e
-        return self.deep_construct(config, final=True, auto_load=auto_load)
+        return self.deep_construct(config, final=final, auto_load=auto_load)
 
-    def construct_from_file(self, file_path: Path, auto_load: bool = False):
+    def construct_from_file(self, file_path: Path, auto_load: bool = False, final: bool = True):
         """Construct the configuration for a yaml file with a single yaml config."""
         if not file_path.is_file():
             if file_path.with_suffix(".yaml").is_file():
@@ -352,4 +352,4 @@ class ConfigLoader:
                 config: Any = yaml.load(file, Loader=self.yaml_loader)
             except (ParserError, ConstructorError) as e:
                 raise e
-        return self.deep_construct(config, final=True, auto_load=auto_load)
+        return self.deep_construct(config, final=final, auto_load=auto_load)
