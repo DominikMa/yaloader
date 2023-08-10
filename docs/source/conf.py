@@ -20,8 +20,8 @@ sys.path.insert(0, os.path.abspath('../../src/'))
 project = 'yaloader - YAML Configuration Loader '
 copyright = '2023, Dominik Mairhöfer'
 author = 'Dominik Mairhöfer'
-version = '1.0.0'
-release = '1.0.0'
+version = '1.0.1'
+release = '1.0.1'
 
 
 # -- General configuration ---------------------------------------------------
