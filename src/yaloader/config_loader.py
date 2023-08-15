@@ -51,11 +51,14 @@ class ConfigLoader:
         """
         # Construct only the flat object
         config = self.flat_construct_from_config(config)
+        fields_set = config.model_fields_set.copy()
 
         # Deep construct every attribute
         for key, v in dict(config).items():
             v = self.deep_construct(v, final=final, auto_load=auto_load)
             setattr(config, key, v)
+
+        setattr(config, '__pydantic_fields_set__', fields_set)
 
         # Ensure that the config is still correct (and complete if final is True)
         config.validate_config(force_all=final)
