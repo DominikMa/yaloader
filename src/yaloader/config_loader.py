@@ -40,13 +40,12 @@ class ConfigLoader:
         self.cache = None if not cacheing else {}
 
     def deep_construct_from_config(
-            self, config: YAMLBaseConfig, final: bool = False, auto_load: bool = False
+            self, config: YAMLBaseConfig, final: bool = False,
     ) -> Any:
         """Deeply construct the config based on a config object.
 
         :param config: The config which should be constructed
         :param final: If False missing values will be ignored
-        :param auto_load: If True automatically call the :meth:`YAMLBaseConfig.load()` method on the loaded config
         :return: The constructed config
         """
         # Construct only the flat object
@@ -55,35 +54,33 @@ class ConfigLoader:
 
         # Deep construct every attribute
         for key, v in dict(config).items():
-            v = self.deep_construct(v, final=final, auto_load=auto_load)
+            v = self.deep_construct(v, final=final)
             setattr(config, key, v)
 
         setattr(config, '__pydantic_fields_set__', fields_set)
 
         # Ensure that the config is still correct (and complete if final is True)
         config.validate_config(force_all=final)
-        if auto_load:
-            return config.load()
         return config
 
     def deep_construct(
-            self, v: Any, final: bool = False, auto_load: bool = False
+            self, v: Any, final: bool = False
     ) -> Any:
         # If v is another config just recursive call deep construct
         if isinstance(v, YAMLBaseConfig):
-            return self.deep_construct_from_config(v, final=final, auto_load=auto_load)
+            return self.deep_construct_from_config(v, final=final)
         # If v is a list, tuple or dict recursively call this method for every item
         elif isinstance(v, List):
             return list(
-                [self.deep_construct(e, final=final, auto_load=auto_load) for e in v]
+                [self.deep_construct(e, final=final) for e in v]
             )
         elif isinstance(v, Tuple):
             return tuple(
-                (self.deep_construct(e, final=final, auto_load=auto_load) for e in v)
+                (self.deep_construct(e, final=final) for e in v)
             )
         elif isinstance(v, Dict):
             return {
-                k: self.deep_construct(e, final=final, auto_load=auto_load)
+                k: self.deep_construct(e, final=final)
                 for k, e in v.items()
             }
         # If v is an unhandled type log a warning and return v itself
@@ -335,15 +332,15 @@ class ConfigLoader:
         for file_path in sorted(directory_path.glob("*.yaml")):
             self.load_file(file_path, priority)
 
-    def construct_from_string(self, string: str, auto_load: bool = False, final: bool = True):
+    def construct_from_string(self, string: str, final: bool = True):
         """Construct the configuration for a yaml string with a single yaml config."""
         try:
             config: Any = yaml.load(string, Loader=self.yaml_loader)
         except (ParserError, ConstructorError) as e:
             raise e
-        return self.deep_construct(config, final=final, auto_load=auto_load)
+        return self.deep_construct(config, final=final)
 
-    def construct_from_file(self, file_path: Path, auto_load: bool = False, final: bool = True):
+    def construct_from_file(self, file_path: Path, final: bool = True):
         """Construct the configuration for a yaml file with a single yaml config."""
         if not file_path.is_file():
             if file_path.with_suffix(".yaml").is_file():
@@ -355,4 +352,4 @@ class ConfigLoader:
                 config: Any = yaml.load(file, Loader=self.yaml_loader)
             except (ParserError, ConstructorError) as e:
                 raise e
-        return self.deep_construct(config, final=final, auto_load=auto_load)
+        return self.deep_construct(config, final=final)
