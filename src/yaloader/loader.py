@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from typing import Dict, Type
+from typing import Dict, Type, Any
 
 import yaml
-from yaml import MarkedYAMLError
+from yaml import MarkedYAMLError, Node
 
 from yaloader import YAMLBaseConfig
 from yaloader.utils import full_object_name
@@ -13,6 +13,7 @@ class YAMLConfigLoader(yaml.SafeLoader):
     """YAML loader for the configs."""
 
     yaml_config_classes: Dict[str, Type[YAMLBaseConfig]] = {}
+    anchors: dict[Any, Node] = {}
 
     @classmethod
     def add_config_constructor(
@@ -72,6 +73,26 @@ class YAMLConfigLoader(yaml.SafeLoader):
         if "yaml_config_classes" not in cls.__dict__:
             cls.yaml_config_classes = cls.yaml_config_classes.copy()
         cls.yaml_config_classes[tag] = config_class
+
+    def compose_document(self):
+        # Drop the DOCUMENT-START event.
+        self.get_event()
+        self.anchors.update(self.__class__.anchors)
+
+        # Compose the root node.
+        node = self.compose_node(None, None)
+
+        # Drop the DOCUMENT-END event.
+        self.get_event()
+
+        self.__class__.anchors.update(self.anchors)
+        self.anchors = {}
+        return node
+
+    def __init_subclass__(cls, **kwargs):
+        cls.yaml_config_classes = {}
+        cls.anchors = {}
+        super().__init_subclass__(**kwargs)
 
 
 class YAMLValueError(MarkedYAMLError):
