@@ -25,13 +25,13 @@ def large_config_list(yaml_loader, config_loader):
 
         field_definitions = {f"attribute{j}": (int, int(j)) if (j + i) % 2 == 0 else (str, str(j)) for j in
                              range(min(i, 20))}
-        field_definitions["_yaml_tag"] = f'!Config{i}'
 
         config_class = pydantic.create_model(
-            __model_name=f'Config{i}Config',
+            f'Config{i}Config',
             __base__=base_config,
             **field_definitions
         )
+        config_class._yaml_tag = f'!Config{i}'
         config_class = yaloader.constructor.loads(yaml_loader=yaml_loader)(config_class)
         config_list.append(config_class)
 
