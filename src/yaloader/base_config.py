@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Optional, Type
 
 from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic_core import InitErrorDetails
 
 from yaloader.utils import full_object_name, remove_missing_errors
 
@@ -61,9 +62,7 @@ class YAMLBaseConfig(BaseModel):
             class_name = class_name.removesuffix("Config")
             yaml_tag = f"!{class_name}"
         elif not yaml_tag.startswith("!"):
-            raise RuntimeError(
-                f"The tag of config class {full_object_name(cls)} does not start with !"
-            )
+            raise RuntimeError(f"The tag of config class {full_object_name(cls)} does not start with !")
         setattr(cls, f"_{cls.__name__}__yaml_tag", yaml_tag)
 
     def validate_config(self, force_all: bool = False) -> None:
@@ -81,8 +80,17 @@ class YAMLBaseConfig(BaseModel):
                 raise
             not_missing_errors = remove_missing_errors(e.errors())
             if len(not_missing_errors) > 0:
-                # noinspection PyTypeChecker
-                raise ValidationError.from_exception_data(title=e.title, line_errors=not_missing_errors)
+                init_errors: list[InitErrorDetails] = []
+                for err in not_missing_errors:
+                    init_err: InitErrorDetails = {
+                        "type": err["type"],
+                        "loc": err["loc"],
+                        "input": err["input"],
+                    }
+                    if "ctx" in err:
+                        init_err["ctx"] = err["ctx"]
+                    init_errors.append(init_err)
+                raise ValidationError.from_exception_data(title=e.title, line_errors=init_errors)
 
     def load(self, *args, **kwargs):
         """Create the object the yaml config object is for.
