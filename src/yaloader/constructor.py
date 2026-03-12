@@ -12,6 +12,17 @@ from yaloader import VarYAMLConfigBase, YAMLBaseConfig, YAMLConfigLoader, YAMLVa
 from yaloader.representer import get_representer_for_class
 
 
+def _check_extra_fields(cls: Type[YAMLBaseConfig], mapping: dict, node: yaml.Node) -> None:
+    """Check for extra fields not defined in the model."""
+    extra_fields = set(mapping.keys()) - set(cls.model_fields.keys())
+    if extra_fields:
+        raise YAMLValueError(
+            f"Could not validate the configuration for the tag {node.tag}",
+            node.start_mark,
+            f"extra fields not permitted: {extra_fields}",
+        )
+
+
 def get_constructor_for_class(cls: Type[YAMLBaseConfig]):
     def constructor(loader: YAMLConfigLoader, node: yaml.MappingNode) -> YAMLBaseConfig:
         """Construct the config object from a mapping."""
@@ -23,6 +34,9 @@ def get_constructor_for_class(cls: Type[YAMLBaseConfig]):
             )
         # Get the mapping in a dictionary
         mapping = loader.construct_mapping(node, deep=True)
+        # Check for extra fields when config is extra="forbid"
+        if cls.model_config.get("extra") == "forbid":
+            _check_extra_fields(cls, mapping, node)
         # Construct an object of this config class WITHOUT validating the inputs
         config_instance: YAMLBaseConfig = cls.model_construct(**mapping)
         # Validate the inputs, but ignore missing errors
@@ -39,11 +53,10 @@ def get_constructor_for_class(cls: Type[YAMLBaseConfig]):
     return constructor
 
 
-def get_multi_constructor_for_vars(yaml_loader: Type[YAMLConfigLoader], yaml_dumper: Optional[Type[
-    YAMLConfigDumper]] = None):
-    def constructor(
-            loader: YAMLConfigLoader, tag_suffix: str, node: yaml.MappingNode
-    ) -> YAMLBaseConfig:
+def get_multi_constructor_for_vars(
+    yaml_loader: Type[YAMLConfigLoader], yaml_dumper: Optional[Type[YAMLConfigDumper]] = None
+):
+    def constructor(loader: YAMLConfigLoader, tag_suffix: str, node: yaml.MappingNode) -> YAMLBaseConfig:
         """Construct the config object from a mapping."""
         if not isinstance(node, yaml.MappingNode):
             raise ParserError(
@@ -96,6 +109,9 @@ def get_multi_constructor_for_vars(yaml_loader: Type[YAMLConfigLoader], yaml_dum
             var_yaml_config_class = VarYAMLConfig
             yaml_loader.yaml_config_classes[node.tag] = var_yaml_config_class
 
+        # Check for extra fields when config is extra="forbid"
+        if var_yaml_config_class.model_config.get("extra") == "forbid":
+            _check_extra_fields(var_yaml_config_class, mapping, node)
         # Construct an object of this config class WITHOUT validating the inputs
         config_instance: YAMLBaseConfig = var_yaml_config_class.model_construct(**mapping)
         # Validate the inputs, but ignore missing errors
@@ -113,10 +129,10 @@ def get_multi_constructor_for_vars(yaml_loader: Type[YAMLConfigLoader], yaml_dum
 
 
 def loads(
-        loaded_class: Optional[Type] = None,
-        overwrite_tag: bool = False,
-        yaml_loader: Optional[Type[YAMLConfigLoader]] = YAMLConfigLoader,
-        yaml_dumper: Optional[Type[YAMLConfigDumper]] = YAMLConfigDumper,
+    loaded_class: Optional[Type] = None,
+    overwrite_tag: bool = False,
+    yaml_loader: Optional[Type[YAMLConfigLoader]] = YAMLConfigLoader,
+    yaml_dumper: Optional[Type[YAMLConfigDumper]] = YAMLConfigDumper,
 ) -> Callable[[Type[YAMLBaseConfig]], Type[YAMLBaseConfig]]:
     """A class decorator for yaml configs to add a simple load function for a given class.
 
@@ -136,17 +152,17 @@ def loads(
             elif isinstance(cls._yaml_tag, str):
                 cls.set_yaml_tag(cls._yaml_tag)
             else:
-                raise TypeError(f'The _yaml_tag attribute has to be of class str or pydantic.ModelPrivateAttr '
-                                f'but got {type(cls._yaml_tag)}.')
+                raise TypeError(
+                    f"The _yaml_tag attribute has to be of class str or pydantic.ModelPrivateAttr "
+                    f"but got {type(cls._yaml_tag)}."
+                )
 
         # Set the _loaded_class attribute
         if loaded_class is not None:
             setattr(cls, "_loaded_class", loaded_class)
 
         if yaml_loader is not None:
-            yaml_loader.add_config_constructor(
-                cls, get_constructor_for_class(cls), overwrite_tag=overwrite_tag
-            )
+            yaml_loader.add_config_constructor(cls, get_constructor_for_class(cls), overwrite_tag=overwrite_tag)
         if yaml_dumper is not None:
             yaml_dumper.add_representer(cls, get_representer_for_class(cls))
 
