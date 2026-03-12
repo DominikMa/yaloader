@@ -87,3 +87,14 @@ def test_caching_load_large_config_list(config_loader, caching_config_loader, la
     config_list_cached = caching_config_loader.construct_from_string(load_string)
 
     assert config_list == config_list_cached
+
+
+def test_cache_invalidated_on_new_config(caching_config_loader, AConfig):
+    """Cache must be cleared when new configs are loaded."""
+    config_before = caching_config_loader.construct_from_string('!A {}')
+    assert config_before.attribute == 0
+
+    caching_config_loader.add_single_config_string('!A {attribute: 42}', priority=1)
+
+    config_after = caching_config_loader.construct_from_string('!A {}')
+    assert config_after.attribute == 42

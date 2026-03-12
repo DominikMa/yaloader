@@ -258,6 +258,15 @@ class ConfigLoader:
             for field in fields:
                 config_attributes[field] = update_dict[field]
 
+    def _clear_cache(self):
+        """Clear the construction cache.
+
+        Must be called whenever configs_per_tag is modified, since
+        cached results may depend on the old config state.
+        """
+        if self.cacheing:
+            self.cache = {}
+
     def add_config(self, config_with_priority: ConfigWithPriority):
         """Add a config object together with its priority to the loader."""
         config: YAMLBaseConfig = config_with_priority.config
@@ -266,6 +275,7 @@ class ConfigLoader:
             self.configs_per_tag[tag].append(config_with_priority)
         except KeyError:
             self.configs_per_tag[tag] = [config_with_priority]
+        self._clear_cache()
 
     def add_single_config_string(self, string: str, priority):
         """Add a yaml string with a single config object."""
