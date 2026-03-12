@@ -85,7 +85,7 @@ class ConfigLoader:
             }
         # If v is an unhandled type log a warning and return v itself
         elif v is not None and not isinstance(
-                v, (int, float, str, PosixPath, datetime.timedelta, datetime.datetime)
+                v, (bool, int, float, str, PosixPath, datetime.date, datetime.timedelta, datetime.datetime)
         ):
             logger.warning(
                 f"Got type {type(v)} while deep construct of a yaml config which is not explicitly handled."
