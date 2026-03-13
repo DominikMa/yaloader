@@ -2,7 +2,7 @@ import pytest
 
 import yaloader
 import yaloader.constructor
-from yaloader import YAMLConfigLoader, ConfigLoader, YAMLBaseConfig
+from yaloader import ConfigLoader, YAMLBaseConfig, YAMLConfigLoader
 
 
 @pytest.fixture
@@ -23,7 +23,7 @@ def config_loader(yaml_loader):
 def AConfig(yaml_loader, config_loader):
     @yaloader.constructor.loads(yaml_loader=yaml_loader)
     class Config(YAMLBaseConfig):
-        _yaml_tag = '!A'
+        _yaml_tag = "!A"
         attribute: int = 0
 
         def load(self, *args, **kwargs):

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from typing import Optional, Type
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, ValidationError
-from pydantic_core import InitErrorDetails
 
 from yaloader.utils import full_object_name, remove_missing_errors
+
+if TYPE_CHECKING:
+    from pydantic_core import InitErrorDetails
 
 
 class VarYAMLConfigBase:
@@ -19,8 +21,8 @@ class YAMLBaseConfig(BaseModel):
     the :meth:`YAMLBaseConfig.load()` method.
     """
 
-    _loaded_class: Optional[Type] = None
-    """The class which is loaded by the configuration. 
+    _loaded_class: type | None = None
+    """The class which is loaded by the configuration.
     Can be None if the loaded class is explicitly specified in the load method."""
 
     model_config = ConfigDict(extra="forbid", validate_assignment=True)
@@ -30,10 +32,11 @@ class YAMLBaseConfig(BaseModel):
     def get_yaml_tag(cls) -> str:
         """Return the configs yaml tag."""
         cls._assure_has_yaml_tag()
-        return getattr(cls, f"_{cls.__name__}__yaml_tag", None)
+        tag: str = getattr(cls, f"_{cls.__name__}__yaml_tag")
+        return tag
 
     @classmethod
-    def set_yaml_tag(cls, yaml_tag: Optional[str]) -> None:
+    def set_yaml_tag(cls, yaml_tag: str | None) -> None:
         """Set the yaml tag of the config.
 
         A valid tag has to start with an exclamation mark.
@@ -90,9 +93,9 @@ class YAMLBaseConfig(BaseModel):
                     if "ctx" in err:
                         init_err["ctx"] = err["ctx"]
                     init_errors.append(init_err)
-                raise ValidationError.from_exception_data(title=e.title, line_errors=init_errors)
+                raise ValidationError.from_exception_data(title=e.title, line_errors=init_errors) from e
 
-    def load(self, *args, **kwargs):
+    def load(self, *args: Any, **kwargs: Any) -> Any:
         """Create the object the yaml config object is for.
 
         This basic constructor uses all attributes of the config as kwargs for the loaded class.

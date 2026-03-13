@@ -28,7 +28,7 @@ def test_anchor_multiple_document(config_loader, AConfig):
 
 
 def test_fail_on_missing_anchor(config_loader, AConfig):
-    with pytest.raises(ComposerError) as error:
+    with pytest.raises(ComposerError):
         config_loader.load_string(
             """
             - !A {attribute: *name}
@@ -37,7 +37,7 @@ def test_fail_on_missing_anchor(config_loader, AConfig):
 
 
 def test_fail_on_same_anchor_name(config_loader, AConfig):
-    with pytest.raises(ComposerError) as error:
+    with pytest.raises(ComposerError):
         config_loader.load_string(
             """
             - !A {attribute: &name 1}

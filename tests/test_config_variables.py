@@ -2,14 +2,14 @@ import pytest
 
 import yaloader
 import yaloader.constructor
-from yaloader import YAMLValueError, YAMLBaseConfig
+from yaloader import YAMLBaseConfig, YAMLValueError
 
 
 @pytest.fixture
 def MultiAttrConfig(yaml_loader, config_loader):
     @yaloader.constructor.loads(yaml_loader=yaml_loader)
     class Config(YAMLBaseConfig):
-        _yaml_tag = '!MAC'
+        _yaml_tag = "!MAC"
         attribute1: int = 0
         attribute2: int = 0
         attribute3: int = 0
@@ -32,17 +32,17 @@ def test_load_list(config_loader, AConfig):
 
 
 def test_raise_on__tag_not_registered(config_loader, AConfig):
-    with pytest.raises(YAMLValueError) as error:
+    with pytest.raises(YAMLValueError):
         config_loader.construct_from_string('!ConfigVarA {_tag: "!B", attribute: 1}')
 
 
 def test_raise_on_additional_attribute(config_loader, AConfig):
-    with pytest.raises(YAMLValueError) as error:
+    with pytest.raises(YAMLValueError):
         config_loader.construct_from_string("!ConfigVarA {_tag: '!A', xyz: 1}")
 
 
 def test_raise_on_wrong_attribute_type(config_loader, AConfig):
-    with pytest.raises(YAMLValueError) as error:
+    with pytest.raises(YAMLValueError):
         config_loader.construct_from_string("!ConfigVarA {_tag: '!A', 'Some text': 1}")
 
 
@@ -57,8 +57,7 @@ def test_multi_load_list(config_loader, AConfig):
         - !ConfigVarABC {_tag: "!A"}
         """
     )
-    assert config_list == [AConfig(attribute=2), AConfig(attribute=2),
-                           AConfig(attribute=1), AConfig(attribute=2)]
+    assert config_list == [AConfig(attribute=2), AConfig(attribute=2), AConfig(attribute=1), AConfig(attribute=2)]
 
 
 def test_multi_load_list_var_config(config_loader, AConfig):
@@ -74,8 +73,13 @@ def test_multi_load_list_var_config(config_loader, AConfig):
         - !ConfigVarABC {_tag: "!A"}
         """
     )
-    assert config_list == [AConfig(attribute=2), AConfig(attribute=2), AConfig(attribute=1),
-                           AConfig(attribute=1), AConfig(attribute=3)]
+    assert config_list == [
+        AConfig(attribute=2),
+        AConfig(attribute=2),
+        AConfig(attribute=1),
+        AConfig(attribute=1),
+        AConfig(attribute=3),
+    ]
 
 
 def test_multi_load_list_var_inheritance(config_loader, AConfig):
@@ -94,10 +98,15 @@ def test_multi_load_list_var_inheritance(config_loader, AConfig):
         - !ConfigVarABCA {attribute: 1, _tag: "!ConfigVarABC"}
         """
     )
-    assert config_list == [AConfig(attribute=2), AConfig(attribute=2), AConfig(attribute=1),
-                           AConfig(attribute=1), AConfig(attribute=3),
-                           AConfig(attribute=3), AConfig(attribute=1),
-                           ]
+    assert config_list == [
+        AConfig(attribute=2),
+        AConfig(attribute=2),
+        AConfig(attribute=1),
+        AConfig(attribute=1),
+        AConfig(attribute=3),
+        AConfig(attribute=3),
+        AConfig(attribute=1),
+    ]
 
 
 def test_multi_load_list_multi_attr_var_inheritance(config_loader, MultiAttrConfig):
