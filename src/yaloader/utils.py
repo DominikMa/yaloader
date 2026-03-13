@@ -23,6 +23,6 @@ def remove_missing_errors(errors: list[ErrorDetails]) -> list[ErrorDetails]:
     """
     not_missing_errors = []
     for error in errors:
-        if error['type'] != 'missing':
+        if error["type"] != "missing":
             not_missing_errors.append(error)
     return not_missing_errors

@@ -20,15 +20,12 @@ def large_config_list(yaml_loader, config_loader):
         base_config_index = int(i / 10)
         base_config = BaseConfig if base_config_index == 0 else config_list[base_config_index]
 
-        field_definitions = {f"attribute{j}": (int, int(j)) if (j + i) % 2 == 0 else (str, str(j)) for j in
-                             range(min(i, 20))}
+        field_definitions = {
+            f"attribute{j}": (int, int(j)) if (j + i) % 2 == 0 else (str, str(j)) for j in range(min(i, 20))
+        }
 
-        config_class = pydantic.create_model(
-            f'Config{i}Config',
-            __base__=base_config,
-            **field_definitions
-        )
-        config_class._yaml_tag = f'!Config{i}'
+        config_class = pydantic.create_model(f"Config{i}Config", __base__=base_config, **field_definitions)
+        config_class._yaml_tag = f"!Config{i}"
         config_class = yaloader.constructor.loads(yaml_loader=yaml_loader)(config_class)
         config_list.append(config_class)
 
@@ -47,27 +44,31 @@ def test_caching_speed_load_large_config_list(config_loader, caching_config_load
     for config in large_config_list:
         load_strings.append(f"- {config.get_yaml_tag()} {{}}")
 
-    load_string = '\n'.join(load_strings)
+    load_string = "\n".join(load_strings)
 
-    time_with_cache = timeit.timeit("config_loader.construct_from_string(load_string)", number=20, globals={
-        'load_string': load_string,
-        'config_loader': caching_config_loader
-    })
+    time_with_cache = timeit.timeit(
+        "config_loader.construct_from_string(load_string)",
+        number=20,
+        globals={"load_string": load_string, "config_loader": caching_config_loader},
+    )
 
-    time_without_cache = timeit.timeit("config_loader.construct_from_string(load_string)", number=20, globals={
-        'load_string': load_string,
-        'config_loader': config_loader
-    })
+    time_without_cache = timeit.timeit(
+        "config_loader.construct_from_string(load_string)",
+        number=20,
+        globals={"load_string": load_string, "config_loader": config_loader},
+    )
 
-    time_without_cache += timeit.timeit("config_loader.construct_from_string(load_string)", number=20, globals={
-        'load_string': load_string,
-        'config_loader': config_loader
-    })
+    time_without_cache += timeit.timeit(
+        "config_loader.construct_from_string(load_string)",
+        number=20,
+        globals={"load_string": load_string, "config_loader": config_loader},
+    )
 
-    time_with_cache += timeit.timeit("config_loader.construct_from_string(load_string)", number=20, globals={
-        'load_string': load_string,
-        'config_loader': caching_config_loader
-    })
+    time_with_cache += timeit.timeit(
+        "config_loader.construct_from_string(load_string)",
+        number=20,
+        globals={"load_string": load_string, "config_loader": caching_config_loader},
+    )
 
     assert time_without_cache > time_with_cache
 
@@ -78,7 +79,7 @@ def test_caching_load_large_config_list(config_loader, caching_config_loader, la
     for config in large_config_list:
         load_strings.append(f"- {config.get_yaml_tag()} {{}}")
 
-    load_string = '\n'.join(load_strings)
+    load_string = "\n".join(load_strings)
 
     config_list = config_loader.construct_from_string(load_string)
     config_list_cached = caching_config_loader.construct_from_string(load_string)
@@ -88,10 +89,10 @@ def test_caching_load_large_config_list(config_loader, caching_config_loader, la
 
 def test_cache_invalidated_on_new_config(caching_config_loader, AConfig):
     """Cache must be cleared when new configs are loaded."""
-    config_before = caching_config_loader.construct_from_string('!A {}')
+    config_before = caching_config_loader.construct_from_string("!A {}")
     assert config_before.attribute == 0
 
-    caching_config_loader.add_single_config_string('!A {attribute: 42}', priority=1)
+    caching_config_loader.add_single_config_string("!A {attribute: 42}", priority=1)
 
-    config_after = caching_config_loader.construct_from_string('!A {}')
+    config_after = caching_config_loader.construct_from_string("!A {}")
     assert config_after.attribute == 42

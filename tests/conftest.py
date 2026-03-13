@@ -23,7 +23,7 @@ def config_loader(yaml_loader):
 def AConfig(yaml_loader, config_loader):
     @yaloader.constructor.loads(yaml_loader=yaml_loader)
     class Config(YAMLBaseConfig):
-        _yaml_tag = '!A'
+        _yaml_tag = "!A"
         attribute: int = 0
 
         def load(self, *args, **kwargs):
