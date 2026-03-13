@@ -38,7 +38,7 @@ def get_constructor_for_class(cls: type[YAMLBaseConfig]) -> Callable:
         if cls.model_config.get("extra") == "forbid":
             _check_extra_fields(cls, mapping, node)
         # Construct an object of this config class WITHOUT validating the inputs
-        config_instance: YAMLBaseConfig = cls.model_construct(**mapping)
+        config_instance: YAMLBaseConfig = cls.model_construct(**mapping)  # type: ignore[arg-type]
         # Validate the inputs, but ignore missing errors
         try:
             cls.validate_config(config_instance, force_all=False)
@@ -71,9 +71,10 @@ def get_multi_constructor_for_vars(
             tag = str(mapping.pop("_tag"))
         except KeyError:
             # TODO test
-            if node.tag in yaml_loader.yaml_config_classes:
-                # noinspection PyUnresolvedReferences
-                tag = yaml_loader.yaml_config_classes[node.tag].__base__.get_yaml_tag()
+            base = yaml_loader.yaml_config_classes.get(node.tag, None)
+            base_parent = base.__base__ if base is not None else None
+            if base_parent is not None and issubclass(base_parent, YAMLBaseConfig):
+                tag = base_parent.get_yaml_tag()
             else:
                 raise YAMLValueError(
                     f"Could not load the configuration for variable with tag {node.tag}",
@@ -90,8 +91,13 @@ def get_multi_constructor_for_vars(
 
         if node.tag in yaml_loader.yaml_config_classes:
             # TODO test
-            # noinspection PyUnresolvedReferences
-            if tag != yaml_loader.yaml_config_classes[node.tag].__base__.get_yaml_tag():
+            existing = yaml_loader.yaml_config_classes[node.tag]
+            existing_base = existing.__base__
+            if (
+                existing_base is not None
+                and issubclass(existing_base, YAMLBaseConfig)
+                and tag != existing_base.get_yaml_tag()
+            ):
                 # TODO test
                 raise YAMLValueError(
                     f"Could not load the configuration for variable with tag {node.tag}",
@@ -113,7 +119,7 @@ def get_multi_constructor_for_vars(
         if var_yaml_config_class.model_config.get("extra") == "forbid":
             _check_extra_fields(var_yaml_config_class, mapping, node)
         # Construct an object of this config class WITHOUT validating the inputs
-        config_instance: YAMLBaseConfig = var_yaml_config_class.model_construct(**mapping)
+        config_instance: YAMLBaseConfig = var_yaml_config_class.model_construct(**mapping)  # type: ignore[arg-type]
         # Validate the inputs, but ignore missing errors
         try:
             var_yaml_config_class.validate_config(config_instance, force_all=False)
@@ -147,14 +153,15 @@ def loads(
     def decorate(cls: type[YAMLBaseConfig]) -> type[YAMLBaseConfig]:
         # If there is an explict yaml tag given use it
         if hasattr(cls, "_yaml_tag"):
-            if isinstance(cls._yaml_tag, ModelPrivateAttr):
-                cls.set_yaml_tag(cls._yaml_tag.default)
-            elif isinstance(cls._yaml_tag, str):
-                cls.set_yaml_tag(cls._yaml_tag)
+            yaml_tag = cls._yaml_tag  # type: ignore[attr-defined]  # runtime-set private attr
+            if isinstance(yaml_tag, ModelPrivateAttr) and isinstance(yaml_tag.default, str):
+                cls.set_yaml_tag(yaml_tag.default)
+            elif isinstance(yaml_tag, str):
+                cls.set_yaml_tag(yaml_tag)
             else:
                 raise TypeError(
                     f"The _yaml_tag attribute has to be of class str or pydantic.ModelPrivateAttr "
-                    f"but got {type(cls._yaml_tag)}."
+                    f"but got {type(yaml_tag)}."
                 )
 
         # Set the _loaded_class attribute

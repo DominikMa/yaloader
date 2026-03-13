@@ -32,7 +32,8 @@ class YAMLBaseConfig(BaseModel):
     def get_yaml_tag(cls) -> str:
         """Return the configs yaml tag."""
         cls._assure_has_yaml_tag()
-        return getattr(cls, f"_{cls.__name__}__yaml_tag", None)
+        tag: str = getattr(cls, f"_{cls.__name__}__yaml_tag")
+        return tag
 
     @classmethod
     def set_yaml_tag(cls, yaml_tag: str | None) -> None:

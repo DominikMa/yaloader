@@ -21,10 +21,10 @@ class YAMLConfigLoader(yaml.SafeLoader):
 
     @classmethod
     def add_config_constructor(
-            cls,
-            config_class: type[YAMLBaseConfig],
-            constructor: Callable,
-            overwrite_tag: bool = False,
+        cls,
+        config_class: type[YAMLBaseConfig],
+        constructor: Callable,
+        overwrite_tag: bool = False,
     ) -> None:
         """Add a yaml config class with its constructor to the loader.
 
@@ -78,19 +78,19 @@ class YAMLConfigLoader(yaml.SafeLoader):
             cls.yaml_config_classes = cls.yaml_config_classes.copy()
         cls.yaml_config_classes[tag] = config_class
 
-    def compose_document(self) -> Node:
+    def compose_document(self) -> Node | None:
         # Drop the DOCUMENT-START event.
         self.get_event()
         self.anchors.update(self.__class__.anchors)
 
         # Compose the root node.
-        node = self.compose_node(None, None)
+        node = self.compose_node(None, None)  # type: ignore[arg-type]  # PyYAML's root call uses None
 
         # Drop the DOCUMENT-END event.
         self.get_event()
 
         self.__class__.anchors.update(self.anchors)
-        self.anchors = {}
+        self.anchors = {}  # type: ignore[misc]  # resets instance-level anchors from Composer.__init__, not ClassVar
         return node
 
     def __init_subclass__(cls, **kwargs: Any) -> None:

@@ -4,10 +4,10 @@ import datetime
 import logging
 from inspect import isclass
 from pathlib import Path, PosixPath
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 import yaml
-from pydantic import BaseModel, conint
+from pydantic import BaseModel, Field
 from yaml.constructor import ConstructorError
 from yaml.parser import ParserError
 
@@ -23,7 +23,7 @@ class ConfigWithPriority(BaseModel):
     """Keep a loaded yaml config class together with its priority."""
 
     config: YAMLBaseConfig
-    priority: conint(ge=0, le=100) = 0
+    priority: Annotated[int, Field(ge=0, le=100)] = 0
 
 
 class ConfigLoader:
@@ -35,6 +35,7 @@ class ConfigLoader:
         # by reference so globally registered configs remain visible.
         class IsolatedLoader(yaml_loader):
             pass
+
         IsolatedLoader.yaml_config_classes = yaml_loader.yaml_config_classes
 
         self.yaml_loader = IsolatedLoader
@@ -47,10 +48,12 @@ class ConfigLoader:
         self.configs_per_tag: dict[str, list[ConfigWithPriority]] = {}
 
         self.cacheing = cacheing
-        self.cache = None if not cacheing else {}
+        self.cache: dict[str, YAMLBaseConfig] = {}
 
     def deep_construct_from_config(
-            self, config: YAMLBaseConfig, final: bool = False,
+        self,
+        config: YAMLBaseConfig,
+        final: bool = False,
     ) -> Any:
         """Deeply construct the config based on a config object.
 
@@ -73,33 +76,22 @@ class ConfigLoader:
         config.validate_config(force_all=final)
         return config
 
-    def deep_construct(
-            self, v: Any, final: bool = False
-    ) -> Any:
+    def deep_construct(self, v: Any, final: bool = False) -> Any:
         # If v is another config just recursive call deep construct
         if isinstance(v, YAMLBaseConfig):
             return self.deep_construct_from_config(v, final=final)
         # If v is a list, tuple or dict recursively call this method for every item
         elif isinstance(v, list):
-            return list(
-                [self.deep_construct(e, final=final) for e in v]
-            )
+            return list([self.deep_construct(e, final=final) for e in v])
         elif isinstance(v, tuple):
-            return tuple(
-                self.deep_construct(e, final=final) for e in v
-            )
+            return tuple(self.deep_construct(e, final=final) for e in v)
         elif isinstance(v, dict):
-            return {
-                k: self.deep_construct(e, final=final)
-                for k, e in v.items()
-            }
+            return {k: self.deep_construct(e, final=final) for k, e in v.items()}
         # If v is an unhandled type log a warning and return v itself
         elif v is not None and not isinstance(
-                v, (bool, int, float, str, PosixPath, datetime.date, datetime.timedelta, datetime.datetime)
+            v, (bool, int, float, str, PosixPath, datetime.date, datetime.timedelta, datetime.datetime)
         ):
-            logger.warning(
-                f"Got type {type(v)} while deep construct of a yaml config which is not explicitly handled."
-            )
+            logger.warning(f"Got type {type(v)} while deep construct of a yaml config which is not explicitly handled.")
         return v
 
     def flat_construct_from_config(self, config: YAMLBaseConfig) -> YAMLBaseConfig:
@@ -113,15 +105,11 @@ class ConfigLoader:
 
         # Get the not explict configs attributes
         not_explict_config_attributes = {}
-        self.update_config_attributes(
-            not_explict_config_attributes, [tag_config, config], explicit=False
-        )
+        self.update_config_attributes(not_explict_config_attributes, [tag_config, config], explicit=False)
 
         # Get the explict configs attributes
         explicit_configs_attributes = {}
-        self.update_config_attributes(
-            explicit_configs_attributes, [tag_config, config], explicit=True
-        )
+        self.update_config_attributes(explicit_configs_attributes, [tag_config, config], explicit=True)
 
         # Update object from loaded config attributes with not explict and explict configs
         config_attributes = {}
@@ -129,9 +117,13 @@ class ConfigLoader:
         config_attributes.update(explicit_configs_attributes)
 
         # If the config is a variable construct using the base class
-        config_cls = tag_config.__class__
-        while issubclass(config_cls, VarYAMLConfigBase):
-            config_cls = config_cls.__base__
+        # The base of a VarYAMLConfigBase is always another VarYAMLConfigBase or a YAMLBaseConfig.
+        config_cls: type[YAMLBaseConfig] = tag_config.__class__
+        while issubclass(config_cls, VarYAMLConfigBase) and issubclass(config_cls, YAMLBaseConfig):
+            base = config_cls.__base__
+            if base is None or not issubclass(base, YAMLBaseConfig):
+                break
+            config_cls = base
 
         constructed_config = config_cls.model_construct(
             _fields_set=set(explicit_configs_attributes.keys()), **config_attributes
@@ -162,39 +154,26 @@ class ConfigLoader:
             default_config = self.yaml_loader.yaml_config_classes[tag].model_construct()
         except KeyError as e:
             raise RuntimeError(
-                f"Can not load configs for {tag}! "
-                f"It seems that no config is registered for that tag."
+                f"Can not load configs for {tag}! It seems that no config is registered for that tag."
             ) from e
 
-        configs_with_priority_for_tag = [
-            ConfigWithPriority(config=default_config, priority=0)
-        ]
+        configs_with_priority_for_tag = [ConfigWithPriority(config=default_config, priority=0)]
         configs_with_priority_for_tag += self.configs_per_tag.get(tag, [])
 
         # Sort pairs by priority (lowest first) and get the config
-        configs_with_priority_for_tag.sort(
-            key=lambda configs_with_priority: configs_with_priority.priority
-        )
-        configs_objects: list[YAMLBaseConfig] = list(
-            map(lambda y: y.config, configs_with_priority_for_tag)
-        )
+        configs_with_priority_for_tag.sort(key=lambda configs_with_priority: configs_with_priority.priority)
+        configs_objects: list[YAMLBaseConfig] = list(map(lambda y: y.config, configs_with_priority_for_tag))
 
         # Get the class of the config, make sure it is exactly one
-        configs_object_classes: set[type[YAMLBaseConfig]] = set(
-            map(lambda o: o.__class__, configs_objects)
-        )
+        configs_object_classes: set[type[YAMLBaseConfig]] = set(map(lambda o: o.__class__, configs_objects))
         if len(configs_object_classes) != 1:
-            raise RuntimeError(
-                f"In the configs for the tag {tag} is more than one class."
-            )
+            raise RuntimeError(f"In the configs for the tag {tag} is more than one class.")
         config_object_class = configs_object_classes.pop()
 
         # Get all config classes which it inherits from
         # noinspection PyTypeChecker
         config_class_bases: Iterator[type[YAMLBaseConfig]] = filter(
-            lambda x: (
-                    isclass(x) and issubclass(x, YAMLBaseConfig) and x != YAMLBaseConfig
-            ),
+            lambda x: isclass(x) and issubclass(x, YAMLBaseConfig) and x != YAMLBaseConfig,
             config_object_class.__bases__,
         )
 
@@ -202,9 +181,7 @@ class ConfigLoader:
         # Construction MUST BE flat. Otherwise there might be circles.
         constructed_config_bases: list[YAMLBaseConfig] = list(
             map(
-                lambda config_base: self.flat_construct_from_tag(
-                    config_base.get_yaml_tag()
-                ),
+                lambda config_base: self.flat_construct_from_tag(config_base.get_yaml_tag()),
                 config_class_bases,
             )
         )
@@ -213,24 +190,16 @@ class ConfigLoader:
         # Construct not explict set config attributes
         not_explict_config_attributes = {}
         # Add all not explict set fields from the bases, starting with the most right base to left base
-        self.update_config_attributes(
-            not_explict_config_attributes, constructed_config_bases, explicit=False
-        )
+        self.update_config_attributes(not_explict_config_attributes, constructed_config_bases, explicit=False)
         # Add all not explict set fields from the loaded configs, starting with the lowest priority to the highest
-        self.update_config_attributes(
-            not_explict_config_attributes, configs_objects, explicit=False
-        )
+        self.update_config_attributes(not_explict_config_attributes, configs_objects, explicit=False)
 
         # Construct explict set config attributes
         explicit_config_attributes = {}
         # Add all explict set fields from the bases, starting with the most right base to left base
-        self.update_config_attributes(
-            explicit_config_attributes, constructed_config_bases, explicit=True
-        )
+        self.update_config_attributes(explicit_config_attributes, constructed_config_bases, explicit=True)
         # Add all explict set fields from the loaded configs, starting with the lowest priority to the highest
-        self.update_config_attributes(
-            explicit_config_attributes, configs_objects, explicit=True
-        )
+        self.update_config_attributes(explicit_config_attributes, configs_objects, explicit=True)
 
         # Overwrite not explict config attributes with explict ones
         config_attributes = {}
@@ -249,9 +218,7 @@ class ConfigLoader:
         return constructed_config.model_copy()
 
     @staticmethod
-    def update_config_attributes(
-            config_attributes: dict, config_updates: list[YAMLBaseConfig], explicit: bool
-    ) -> None:
+    def update_config_attributes(config_attributes: dict, config_updates: list[YAMLBaseConfig], explicit: bool) -> None:
         """Add config attributes from update configs to the current config attributes.
 
         If the field already exists overwrite it. So `config_updates` are lowest priority first.
@@ -262,9 +229,7 @@ class ConfigLoader:
         """
         for update in config_updates:
             update_dict = dict(update)
-            fields = filter(
-                lambda f: (f in update.model_fields_set) == explicit, update_dict.keys()
-            )
+            fields = filter(lambda f: (f in update.model_fields_set) == explicit, update_dict.keys())
             for field in fields:
                 config_attributes[field] = update_dict[field]
 
@@ -274,8 +239,7 @@ class ConfigLoader:
         Must be called whenever configs_per_tag is modified, since
         cached results may depend on the old config state.
         """
-        if self.cacheing:
-            self.cache = {}
+        self.cache = {}
 
     def add_config(self, config_with_priority: ConfigWithPriority) -> None:
         """Add a config object together with its priority to the loader."""
@@ -292,9 +256,7 @@ class ConfigLoader:
         config: YAMLBaseConfig = yaml.load(string, Loader=self.yaml_loader)
         if not isinstance(config, YAMLBaseConfig):
             string = string.replace("\n", "\n\t")
-            raise ValueError(
-                f"The given string is not a registered config:\n\n\t{string}"
-            )
+            raise ValueError(f"The given string is not a registered config:\n\n\t{string}")
         config_with_priority = ConfigWithPriority(config=config, priority=priority)
         self.add_config(config_with_priority)
 
@@ -303,11 +265,7 @@ class ConfigLoader:
         given_priority = priority
         for config_element in config_data:
             if isinstance(config_element, dict) and "priority" in config_element:
-                priority = (
-                    config_element["priority"]
-                    if given_priority is None
-                    else given_priority
-                )
+                priority = config_element["priority"] if given_priority is None else given_priority
             elif isinstance(config_element, list):
                 for config in config_element:
                     if isinstance(config, YAMLBaseConfig):
@@ -318,8 +276,7 @@ class ConfigLoader:
                         self.add_config(config_with_priority)
             else:
                 raise ValueError(
-                    "Entries in the config files must be mapping containing a priority key "
-                    "or a list of configs."
+                    "Entries in the config files must be mapping containing a priority key or a list of configs."
                 )
 
     def load_string(self, string: str, priority: int | None = None) -> None:
