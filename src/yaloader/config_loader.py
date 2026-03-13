@@ -27,10 +27,17 @@ class ConfigLoader:
     """The loader which will keep track of all loaded yaml configs."""
 
     def __init__(self, yaml_loader: Type[YAMLConfigLoader] = YAMLConfigLoader, cacheing: bool = True):
-        self.yaml_loader = yaml_loader
+        # Create an isolated subclass so that anchors don't leak between
+        # independent ConfigLoader instances. yaml_config_classes is shared
+        # by reference so globally registered configs remain visible.
+        class IsolatedLoader(yaml_loader):
+            pass
+        IsolatedLoader.yaml_config_classes = yaml_loader.yaml_config_classes
+
+        self.yaml_loader = IsolatedLoader
         self.yaml_loader.add_multi_constructor(
             tag_prefix="!ConfigVar",
-            multi_constructor=get_multi_constructor_for_vars(yaml_loader),
+            multi_constructor=get_multi_constructor_for_vars(IsolatedLoader),
         )
 
         # All loaded yaml configs with their priorities per tag
