@@ -27,7 +27,7 @@ def test_error_on_standard_tag(yaml_loader):
         class Config(YAMLBaseConfig):
             _yaml_tag = "!!str"
 
-    assert str(error.value).startswith(f"The tag !!str has the prefix !! and can therefore not be used")
+    assert str(error.value).startswith("The tag !!str has the prefix !! and can therefore not be used")
 
 
 def test_error_on_existing_tag(yaml_loader):
@@ -38,7 +38,7 @@ def test_error_on_existing_tag(yaml_loader):
         class Config(YAMLBaseConfig):
             _yaml_tag = "!A"
 
-    assert str(error.value).startswith(f"The tag !A is already registered and can not be used")
+    assert str(error.value).startswith("The tag !A is already registered and can not be used")
 
 
 def test_error_on_registered_tag(yaml_loader, AConfig):

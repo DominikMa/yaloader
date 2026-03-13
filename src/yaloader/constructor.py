@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import textwrap
-from typing import Type, Optional, Callable
+from typing import Callable, Optional, Type
 
 import yaml
 from pydantic import ValidationError
 from pydantic.fields import ModelPrivateAttr
 from yaml.parser import ParserError
 
-from yaloader import VarYAMLConfigBase, YAMLBaseConfig, YAMLConfigLoader, YAMLValueError, YAMLConfigDumper
+from yaloader import VarYAMLConfigBase, YAMLBaseConfig, YAMLConfigDumper, YAMLConfigLoader, YAMLValueError
 from yaloader.representer import get_representer_for_class
 
 
@@ -78,14 +78,14 @@ def get_multi_constructor_for_vars(
                 raise YAMLValueError(
                     f"Could not load the configuration for variable with tag {node.tag}",
                     node.start_mark,
-                    f"_tag attribute is missing",
+                    "_tag attribute is missing",
                 )
         if tag not in yaml_loader.yaml_config_classes:
             # TODO test
             raise YAMLValueError(
                 f"Could not load the configuration for variable with tag {node.tag}",
                 node.start_mark,
-                f"_tag attribute is no registered config",
+                "_tag attribute is no registered config",
             )
 
         if node.tag in yaml_loader.yaml_config_classes:
@@ -96,7 +96,7 @@ def get_multi_constructor_for_vars(
                 raise YAMLValueError(
                     f"Could not load the configuration for variable with tag {node.tag}",
                     node.start_mark,
-                    f"variable with same tag already has another _tag attribute",
+                    "variable with same tag already has another _tag attribute",
                 )
             var_yaml_config_class = yaml_loader.yaml_config_classes[node.tag]
         else:
@@ -159,7 +159,7 @@ def loads(
 
         # Set the _loaded_class attribute
         if loaded_class is not None:
-            setattr(cls, "_loaded_class", loaded_class)
+            cls._loaded_class = loaded_class
 
         if yaml_loader is not None:
             yaml_loader.add_config_constructor(cls, get_constructor_for_class(cls), overwrite_tag=overwrite_tag)

@@ -2,16 +2,17 @@ from __future__ import annotations
 
 import datetime
 import logging
+from collections.abc import Iterator
 from inspect import isclass
-from pathlib import PosixPath, Path
-from typing import Type, Dict, List, Any, Tuple, Set, Iterator, Union, Optional
+from pathlib import Path, PosixPath
+from typing import Any, Dict, List, Optional, Set, Tuple, Type, Union
 
 import yaml
 from pydantic import BaseModel, conint
 from yaml.constructor import ConstructorError
 from yaml.parser import ParserError
 
-from yaloader import YAMLBaseConfig, YAMLConfigLoader, get_multi_constructor_for_vars, VarYAMLConfigBase
+from yaloader import VarYAMLConfigBase, YAMLBaseConfig, YAMLConfigLoader, get_multi_constructor_for_vars
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +65,7 @@ class ConfigLoader:
             v = self.deep_construct(v, final=final)
             setattr(config, key, v)
 
-        setattr(config, '__pydantic_fields_set__', fields_set)
+        config.__pydantic_fields_set__ = fields_set
 
         # Ensure that the config is still correct (and complete if final is True)
         config.validate_config(force_all=final)
@@ -83,7 +84,7 @@ class ConfigLoader:
             )
         elif isinstance(v, Tuple):
             return tuple(
-                (self.deep_construct(e, final=final) for e in v)
+                self.deep_construct(e, final=final) for e in v
             )
         elif isinstance(v, Dict):
             return {
@@ -315,8 +316,8 @@ class ConfigLoader:
                         self.add_config(config_with_priority)
             else:
                 raise ValueError(
-                    f"Entries in the config files must be mapping containing a priority key "
-                    f"or a list of configs."
+                    "Entries in the config files must be mapping containing a priority key "
+                    "or a list of configs."
                 )
 
     def load_string(self, string, priority: Optional[int] = None):

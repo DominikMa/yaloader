@@ -2,7 +2,7 @@ import pytest
 
 import yaloader
 import yaloader.constructor
-from yaloader import YAMLValueError, YAMLBaseConfig
+from yaloader import YAMLBaseConfig, YAMLValueError
 
 
 @pytest.fixture

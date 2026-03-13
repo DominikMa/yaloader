@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, Type, Any
+from typing import Any, Dict, Type
 
 import yaml
 from yaml import MarkedYAMLError, Node

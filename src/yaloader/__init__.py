@@ -19,17 +19,17 @@ from yaloader.config_loader import ConfigLoader
 __version__ = version("yaloader")
 
 __all__ = [
-    '__version__',
+    'ConfigLoader',
     'VarYAMLConfigBase',
     'YAMLBaseConfig',
+    'YAMLConfigDumper',
     'YAMLConfigLoader',
     'YAMLValueError',
-    'YAMLConfigDumper',
+    '__version__',
     'get_constructor_for_class',
     'get_multi_constructor_for_vars',
     'loads',
     'representer',
-    'ConfigLoader',
 ]
 
 yaml.add_representer(PosixPath, representer.represent_posix_path, Dumper=YAMLConfigDumper)

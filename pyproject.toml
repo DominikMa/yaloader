@@ -35,6 +35,27 @@ Documentation = "https://yaloader.readthedocs.io"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.ruff]
+target-version = "py39"
+line-length = 120
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "ANN", "B", "UP", "SIM", "TCH", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/yaloader/__init__.py" = ["I001"]  # import order is intentional (circular imports)
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["long: marks tests as long-running"]
+
+[tool.coverage.run]
+source = ["yaloader"]
+
+[tool.coverage.report]
+fail_under = 80
+
 [dependency-groups]
 dev = [
     "autodoc-pydantic>=2.2.0",

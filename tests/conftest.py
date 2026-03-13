@@ -2,7 +2,7 @@ import pytest
 
 import yaloader
 import yaloader.constructor
-from yaloader import YAMLConfigLoader, ConfigLoader, YAMLBaseConfig
+from yaloader import ConfigLoader, YAMLBaseConfig, YAMLConfigLoader
 
 
 @pytest.fixture

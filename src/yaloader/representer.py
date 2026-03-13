@@ -6,7 +6,7 @@ from typing import Type
 
 from pydantic import BaseModel
 
-from yaloader import YAMLConfigDumper, YAMLBaseConfig
+from yaloader import YAMLBaseConfig, YAMLConfigDumper
 
 
 def represent_posix_path(dumper: YAMLConfigDumper, data: PosixPath):
