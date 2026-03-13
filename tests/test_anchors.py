@@ -166,8 +166,7 @@ def test_isolation_with_pre_existing_anchors_on_parent(yaml_loader, AConfig):
     should NOT inherit those anchors."""
     from yaloader import ConfigLoader
 
-    # First loader adds anchors to its IsolatedLoader (not yaml_loader itself,
-    # but let's verify a second loader is still clean)
+    # First loader adds anchors to its IsolatedLoader
     loader_first = ConfigLoader(yaml_loader=yaml_loader, cacheing=False)
     loader_first.load_string(
         """
