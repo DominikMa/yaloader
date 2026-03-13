@@ -1,4 +1,5 @@
 import datetime
+from importlib.metadata import version
 from pathlib import PosixPath, WindowsPath
 
 import yaml
@@ -15,10 +16,10 @@ from yaloader.constructor import get_constructor_for_class, get_multi_constructo
 
 from yaloader.config_loader import ConfigLoader
 
-VERSION = '1.0.2'
+__version__ = version("yaloader")
 
 __all__ = [
-    'VERSION',
+    '__version__',
     'VarYAMLConfigBase',
     'YAMLBaseConfig',
     'YAMLConfigLoader',
