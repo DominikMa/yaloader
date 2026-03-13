@@ -1,4 +1,4 @@
-from typing import Any, List
+from typing import Any
 
 from pydantic_core import ErrorDetails
 
@@ -13,7 +13,7 @@ def full_object_name(o: Any) -> str:
 
 
 # TODO add types
-def remove_missing_errors(errors: List[ErrorDetails]) -> List[ErrorDetails]:
+def remove_missing_errors(errors: list[ErrorDetails]) -> list[ErrorDetails]:
     """Recursively remove all errors which are :class:`pydantic.PydanticUndefinedAnnotation` from a list of errors.
 
     Errors in the given list might be altered while filtering.

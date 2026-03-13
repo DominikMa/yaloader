@@ -64,5 +64,5 @@ def test_no_loaded_class_argument_raises(yaml_loader, config_loader):
         attribute: int = 0
 
     config = config_loader.construct_from_string("!Class {attribute: 1}")
-    with pytest.raises(NotImplementedError) as error:
-        klass = config.load()
+    with pytest.raises(NotImplementedError):
+        config.load()

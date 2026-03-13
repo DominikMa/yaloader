@@ -32,17 +32,17 @@ def test_load_list(config_loader, AConfig):
 
 
 def test_raise_on__tag_not_registered(config_loader, AConfig):
-    with pytest.raises(YAMLValueError) as error:
+    with pytest.raises(YAMLValueError):
         config_loader.construct_from_string('!ConfigVarA {_tag: "!B", attribute: 1}')
 
 
 def test_raise_on_additional_attribute(config_loader, AConfig):
-    with pytest.raises(YAMLValueError) as error:
+    with pytest.raises(YAMLValueError):
         config_loader.construct_from_string("!ConfigVarA {_tag: '!A', xyz: 1}")
 
 
 def test_raise_on_wrong_attribute_type(config_loader, AConfig):
-    with pytest.raises(YAMLValueError) as error:
+    with pytest.raises(YAMLValueError):
         config_loader.construct_from_string("!ConfigVarA {_tag: '!A', 'Some text': 1}")
 
 

@@ -17,8 +17,8 @@ def BConfig(yaml_loader, AConfig):
 
 def test_loading_subclass(config_loader, AConfig, BConfig):
     config = config_loader.deep_construct_from_config(BConfig(), final=True)
-    assert type(config) != AConfig
-    assert type(config) == BConfig
+    assert type(config) is not AConfig
+    assert type(config) is BConfig
 
 
 def test_error_on_standard_tag(yaml_loader):

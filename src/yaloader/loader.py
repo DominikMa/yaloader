@@ -1,25 +1,29 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Type
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import yaml
 from yaml import MarkedYAMLError, Node
 
-from yaloader import YAMLBaseConfig
 from yaloader.utils import full_object_name
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from yaloader import YAMLBaseConfig
 
 
 class YAMLConfigLoader(yaml.SafeLoader):
     """YAML loader for the configs."""
 
-    yaml_config_classes: Dict[str, Type[YAMLBaseConfig]] = {}
-    anchors: dict[Any, Node] = {}
+    yaml_config_classes: ClassVar[dict[str, type[YAMLBaseConfig]]] = {}
+    anchors: ClassVar[dict[Any, Node]] = {}
 
     @classmethod
     def add_config_constructor(
             cls,
-            config_class: Type[YAMLBaseConfig],
-            constructor,
+            config_class: type[YAMLBaseConfig],
+            constructor: Callable,
             overwrite_tag: bool = False,
     ) -> None:
         """Add a yaml config class with its constructor to the loader.
@@ -74,7 +78,7 @@ class YAMLConfigLoader(yaml.SafeLoader):
             cls.yaml_config_classes = cls.yaml_config_classes.copy()
         cls.yaml_config_classes[tag] = config_class
 
-    def compose_document(self):
+    def compose_document(self) -> Node:
         # Drop the DOCUMENT-START event.
         self.get_event()
         self.anchors.update(self.__class__.anchors)
@@ -89,7 +93,7 @@ class YAMLConfigLoader(yaml.SafeLoader):
         self.anchors = {}
         return node
 
-    def __init_subclass__(cls, **kwargs):
+    def __init_subclass__(cls, **kwargs: Any) -> None:
         cls.yaml_config_classes = {}
         cls.anchors = {}
         super().__init_subclass__(**kwargs)

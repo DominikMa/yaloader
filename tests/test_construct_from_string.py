@@ -16,17 +16,17 @@ def test_load_list(config_loader, AConfig):
 
 
 def test_raise_on_not_a_mapping(config_loader, AConfig):
-    with pytest.raises(ParserError) as error:
+    with pytest.raises(ParserError):
         config_loader.construct_from_string("!A 2")
 
 
 def test_raise_on_additional_attribute(config_loader, AConfig):
-    with pytest.raises(YAMLValueError) as error:
+    with pytest.raises(YAMLValueError):
         config_loader.construct_from_string("!A {xyz: 1}")
 
 
 def test_raise_on_wrong_attribute_type(config_loader, AConfig):
-    with pytest.raises(YAMLValueError) as error:
+    with pytest.raises(YAMLValueError):
         config_loader.construct_from_string('!A {attribute: "Some text"}')
 
 

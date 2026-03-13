@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import textwrap
-from typing import Callable, Optional, Type
+from typing import Callable
 
 import yaml
 from pydantic import ValidationError
@@ -12,7 +12,7 @@ from yaloader import VarYAMLConfigBase, YAMLBaseConfig, YAMLConfigDumper, YAMLCo
 from yaloader.representer import get_representer_for_class
 
 
-def _check_extra_fields(cls: Type[YAMLBaseConfig], mapping: dict, node: yaml.Node) -> None:
+def _check_extra_fields(cls: type[YAMLBaseConfig], mapping: dict, node: yaml.Node) -> None:
     """Check for extra fields not defined in the model."""
     extra_fields = set(mapping.keys()) - set(cls.model_fields.keys())
     if extra_fields:
@@ -23,7 +23,7 @@ def _check_extra_fields(cls: Type[YAMLBaseConfig], mapping: dict, node: yaml.Nod
         )
 
 
-def get_constructor_for_class(cls: Type[YAMLBaseConfig]):
+def get_constructor_for_class(cls: type[YAMLBaseConfig]) -> Callable:
     def constructor(loader: YAMLConfigLoader, node: yaml.MappingNode) -> YAMLBaseConfig:
         """Construct the config object from a mapping."""
         if not isinstance(node, yaml.MappingNode):
@@ -54,8 +54,8 @@ def get_constructor_for_class(cls: Type[YAMLBaseConfig]):
 
 
 def get_multi_constructor_for_vars(
-    yaml_loader: Type[YAMLConfigLoader], yaml_dumper: Optional[Type[YAMLConfigDumper]] = None
-):
+    yaml_loader: type[YAMLConfigLoader], yaml_dumper: type[YAMLConfigDumper] | None = None
+) -> Callable:
     def constructor(loader: YAMLConfigLoader, tag_suffix: str, node: yaml.MappingNode) -> YAMLBaseConfig:
         """Construct the config object from a mapping."""
         if not isinstance(node, yaml.MappingNode):
@@ -79,7 +79,7 @@ def get_multi_constructor_for_vars(
                     f"Could not load the configuration for variable with tag {node.tag}",
                     node.start_mark,
                     "_tag attribute is missing",
-                )
+                ) from None
         if tag not in yaml_loader.yaml_config_classes:
             # TODO test
             raise YAMLValueError(
@@ -122,18 +122,18 @@ def get_multi_constructor_for_vars(
                 f"Could not validate the configuration for the tag {node.tag}",
                 node.start_mark,
                 textwrap.indent(str(e), 2 * " "),
-            )
+            ) from e
         return config_instance
 
     return constructor
 
 
 def loads(
-    loaded_class: Optional[Type] = None,
+    loaded_class: type | None = None,
     overwrite_tag: bool = False,
-    yaml_loader: Optional[Type[YAMLConfigLoader]] = YAMLConfigLoader,
-    yaml_dumper: Optional[Type[YAMLConfigDumper]] = YAMLConfigDumper,
-) -> Callable[[Type[YAMLBaseConfig]], Type[YAMLBaseConfig]]:
+    yaml_loader: type[YAMLConfigLoader] | None = YAMLConfigLoader,
+    yaml_dumper: type[YAMLConfigDumper] | None = YAMLConfigDumper,
+) -> Callable[[type[YAMLBaseConfig]], type[YAMLBaseConfig]]:
     """A class decorator for yaml configs to add a simple load function for a given class.
 
     A load function, which gets all attributes of the config
@@ -144,7 +144,7 @@ def loads(
     :return: The class decorator
     """
 
-    def decorate(cls: Type[YAMLBaseConfig]):
+    def decorate(cls: type[YAMLBaseConfig]) -> type[YAMLBaseConfig]:
         # If there is an explict yaml tag given use it
         if hasattr(cls, "_yaml_tag"):
             if isinstance(cls._yaml_tag, ModelPrivateAttr):

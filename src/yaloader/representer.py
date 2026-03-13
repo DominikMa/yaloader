@@ -1,32 +1,36 @@
 from __future__ import annotations
 
-import datetime
-from pathlib import PosixPath, WindowsPath
-from typing import Type
-
-from pydantic import BaseModel
+from typing import TYPE_CHECKING
 
 from yaloader import YAMLBaseConfig, YAMLConfigDumper
 
+if TYPE_CHECKING:
+    import datetime
+    from collections.abc import Callable
+    from pathlib import PosixPath, WindowsPath
 
-def represent_posix_path(dumper: YAMLConfigDumper, data: PosixPath):
+    from pydantic import BaseModel
+    from yaml.nodes import Node
+
+
+def represent_posix_path(dumper: YAMLConfigDumper, data: PosixPath) -> Node:
     return dumper.represent_str(str(data.absolute()))
 
 
-def represent_windows_path(dumper: YAMLConfigDumper, data: WindowsPath):
+def represent_windows_path(dumper: YAMLConfigDumper, data: WindowsPath) -> Node:
     return dumper.represent_str(str(data.absolute()))
 
 
-def represent_timedelta(dumper: YAMLConfigDumper, data: datetime.timedelta):
+def represent_timedelta(dumper: YAMLConfigDumper, data: datetime.timedelta) -> Node:
     return dumper.represent_str(str(data))
 
 
-def represent_base_model(dumper: YAMLConfigDumper, data: BaseModel):
+def represent_base_model(dumper: YAMLConfigDumper, data: BaseModel) -> Node:
     return dumper.represent_dict(data.model_dump())
 
 
-def get_representer_for_class(cls: Type[YAMLBaseConfig]):
-    def represent_config(dumper: YAMLConfigDumper, data: YAMLBaseConfig):
+def get_representer_for_class(cls: type[YAMLBaseConfig]) -> Callable:
+    def represent_config(dumper: YAMLConfigDumper, data: YAMLBaseConfig) -> Node:
         """Represent the config object as a mapping."""
         # Get all keys which should be dumped
         keys = set(

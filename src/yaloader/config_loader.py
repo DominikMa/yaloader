@@ -2,10 +2,9 @@ from __future__ import annotations
 
 import datetime
 import logging
-from collections.abc import Iterator
 from inspect import isclass
 from pathlib import Path, PosixPath
-from typing import Any, Dict, List, Optional, Set, Tuple, Type, Union
+from typing import TYPE_CHECKING, Any
 
 import yaml
 from pydantic import BaseModel, conint
@@ -13,6 +12,9 @@ from yaml.constructor import ConstructorError
 from yaml.parser import ParserError
 
 from yaloader import VarYAMLConfigBase, YAMLBaseConfig, YAMLConfigLoader, get_multi_constructor_for_vars
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +29,7 @@ class ConfigWithPriority(BaseModel):
 class ConfigLoader:
     """The loader which will keep track of all loaded yaml configs."""
 
-    def __init__(self, yaml_loader: Type[YAMLConfigLoader] = YAMLConfigLoader, cacheing: bool = True):
+    def __init__(self, yaml_loader: type[YAMLConfigLoader] = YAMLConfigLoader, cacheing: bool = True) -> None:
         # Create an isolated subclass so that anchors don't leak between
         # independent ConfigLoader instances. yaml_config_classes is shared
         # by reference so globally registered configs remain visible.
@@ -42,7 +44,7 @@ class ConfigLoader:
         )
 
         # All loaded yaml configs with their priorities per tag
-        self.configs_per_tag: Dict[str, List[ConfigWithPriority]] = {}
+        self.configs_per_tag: dict[str, list[ConfigWithPriority]] = {}
 
         self.cacheing = cacheing
         self.cache = None if not cacheing else {}
@@ -78,15 +80,15 @@ class ConfigLoader:
         if isinstance(v, YAMLBaseConfig):
             return self.deep_construct_from_config(v, final=final)
         # If v is a list, tuple or dict recursively call this method for every item
-        elif isinstance(v, List):
+        elif isinstance(v, list):
             return list(
                 [self.deep_construct(e, final=final) for e in v]
             )
-        elif isinstance(v, Tuple):
+        elif isinstance(v, tuple):
             return tuple(
                 self.deep_construct(e, final=final) for e in v
             )
-        elif isinstance(v, Dict):
+        elif isinstance(v, dict):
             return {
                 k: self.deep_construct(e, final=final)
                 for k, e in v.items()
@@ -173,12 +175,12 @@ class ConfigLoader:
         configs_with_priority_for_tag.sort(
             key=lambda configs_with_priority: configs_with_priority.priority
         )
-        configs_objects: List[YAMLBaseConfig] = list(
+        configs_objects: list[YAMLBaseConfig] = list(
             map(lambda y: y.config, configs_with_priority_for_tag)
         )
 
         # Get the class of the config, make sure it is exactly one
-        configs_object_classes: Set[Type[YAMLBaseConfig]] = set(
+        configs_object_classes: set[type[YAMLBaseConfig]] = set(
             map(lambda o: o.__class__, configs_objects)
         )
         if len(configs_object_classes) != 1:
@@ -189,16 +191,16 @@ class ConfigLoader:
 
         # Get all config classes which it inherits from
         # noinspection PyTypeChecker
-        config_class_bases: Iterator[Type[YAMLBaseConfig]] = filter(
+        config_class_bases: Iterator[type[YAMLBaseConfig]] = filter(
             lambda x: (
-                    isclass(x) and issubclass(x, YAMLBaseConfig) and not x == YAMLBaseConfig
+                    isclass(x) and issubclass(x, YAMLBaseConfig) and x != YAMLBaseConfig
             ),
             config_object_class.__bases__,
         )
 
         # Construct all bases, in reversed order (first base has the highest priority and should be at end of the list)
         # Construction MUST BE flat. Otherwise there might be circles.
-        constructed_config_bases: List[YAMLBaseConfig] = list(
+        constructed_config_bases: list[YAMLBaseConfig] = list(
             map(
                 lambda config_base: self.flat_construct_from_tag(
                     config_base.get_yaml_tag()
@@ -248,7 +250,7 @@ class ConfigLoader:
 
     @staticmethod
     def update_config_attributes(
-            config_attributes: dict, config_updates: List[YAMLBaseConfig], explicit: bool
+            config_attributes: dict, config_updates: list[YAMLBaseConfig], explicit: bool
     ) -> None:
         """Add config attributes from update configs to the current config attributes.
 
@@ -266,7 +268,7 @@ class ConfigLoader:
             for field in fields:
                 config_attributes[field] = update_dict[field]
 
-    def _clear_cache(self):
+    def _clear_cache(self) -> None:
         """Clear the construction cache.
 
         Must be called whenever configs_per_tag is modified, since
@@ -275,7 +277,7 @@ class ConfigLoader:
         if self.cacheing:
             self.cache = {}
 
-    def add_config(self, config_with_priority: ConfigWithPriority):
+    def add_config(self, config_with_priority: ConfigWithPriority) -> None:
         """Add a config object together with its priority to the loader."""
         config: YAMLBaseConfig = config_with_priority.config
         tag = config.get_yaml_tag()
@@ -285,7 +287,7 @@ class ConfigLoader:
             self.configs_per_tag[tag] = [config_with_priority]
         self._clear_cache()
 
-    def add_single_config_string(self, string: str, priority):
+    def add_single_config_string(self, string: str, priority: int) -> None:
         """Add a yaml string with a single config object."""
         config: YAMLBaseConfig = yaml.load(string, Loader=self.yaml_loader)
         if not isinstance(config, YAMLBaseConfig):
@@ -296,17 +298,17 @@ class ConfigLoader:
         config_with_priority = ConfigWithPriority(config=config, priority=priority)
         self.add_config(config_with_priority)
 
-    def add_config_data(self, config_data: List[Union[Dict, List]], priority=None):
+    def add_config_data(self, config_data: list[dict | list], priority: int | None = None) -> None:
         """Add multiple configs or priorities."""
         given_priority = priority
         for config_element in config_data:
-            if isinstance(config_element, Dict) and "priority" in config_element:
+            if isinstance(config_element, dict) and "priority" in config_element:
                 priority = (
                     config_element["priority"]
                     if given_priority is None
                     else given_priority
                 )
-            elif isinstance(config_element, List):
+            elif isinstance(config_element, list):
                 for config in config_element:
                     if isinstance(config, YAMLBaseConfig):
                         config_with_priority = ConfigWithPriority(
@@ -320,15 +322,15 @@ class ConfigLoader:
                     "or a list of configs."
                 )
 
-    def load_string(self, string, priority: Optional[int] = None):
+    def load_string(self, string: str, priority: int | None = None) -> None:
         """Load a yaml string including multiple configs or priorities."""
         try:
-            config_data: List = list(yaml.load_all(string, Loader=self.yaml_loader))
+            config_data: list = list(yaml.load_all(string, Loader=self.yaml_loader))
         except (ParserError, ConstructorError) as e:
             raise e
         self.add_config_data(config_data, priority)
 
-    def load_file(self, file_path: Path, priority: Optional[int] = None):
+    def load_file(self, file_path: Path, priority: int | None = None) -> None:
         """Load a yaml file including multiple configs or priorities."""
         if not file_path.is_file():
             if file_path.with_suffix(".yaml").is_file():
@@ -338,19 +340,19 @@ class ConfigLoader:
 
         with open(file_path) as file:
             try:
-                config_data: List = list(yaml.load_all(file, Loader=self.yaml_loader))
+                config_data: list = list(yaml.load_all(file, Loader=self.yaml_loader))
             except (ParserError, ConstructorError) as e:
                 raise e
         self.add_config_data(config_data, priority)
 
-    def load_directory(self, directory_path: Path, priority: Optional[int] = None):
+    def load_directory(self, directory_path: Path, priority: int | None = None) -> None:
         """Load all files ending with .yaml from a directory."""
         if not directory_path.is_dir():
             raise NotADirectoryError(f"{directory_path} is not a directory.")
         for file_path in sorted(directory_path.glob("*.yaml")):
             self.load_file(file_path, priority)
 
-    def construct_from_string(self, string: str, final: bool = True):
+    def construct_from_string(self, string: str, final: bool = True) -> Any:
         """Construct the configuration for a yaml string with a single yaml config."""
         try:
             config: Any = yaml.load(string, Loader=self.yaml_loader)
@@ -358,7 +360,7 @@ class ConfigLoader:
             raise e
         return self.deep_construct(config, final=final)
 
-    def construct_from_file(self, file_path: Path, final: bool = True):
+    def construct_from_file(self, file_path: Path, final: bool = True) -> Any:
         """Construct the configuration for a yaml file with a single yaml config."""
         if not file_path.is_file():
             if file_path.with_suffix(".yaml").is_file():

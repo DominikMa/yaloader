@@ -18,10 +18,7 @@ def large_config_list(yaml_loader, config_loader):
     config_list = []
     for i in range(10):
         base_config_index = int(i / 10)
-        if base_config_index == 0:
-            base_config = BaseConfig
-        else:
-            base_config = config_list[base_config_index]
+        base_config = BaseConfig if base_config_index == 0 else config_list[base_config_index]
 
         field_definitions = {f"attribute{j}": (int, int(j)) if (j + i) % 2 == 0 else (str, str(j)) for j in
                              range(min(i, 20))}
