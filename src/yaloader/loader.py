@@ -73,7 +73,7 @@ class YAMLConfigLoader(yaml.SafeLoader):
 
         cls.add_constructor(tag, constructor)
 
-        # TODO: Not quite sure if this makes sense. Copied from the original yaml loader.
+        # Not quite sure if this makes sense. Copied from the original yaml loader.
         if "yaml_config_classes" not in cls.__dict__:
             cls.yaml_config_classes = cls.yaml_config_classes.copy()
         cls.yaml_config_classes[tag] = config_class

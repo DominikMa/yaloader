@@ -70,7 +70,6 @@ def get_multi_constructor_for_vars(
         try:
             tag = str(mapping.pop("_tag"))
         except KeyError:
-            # TODO test
             base = yaml_loader.yaml_config_classes.get(node.tag, None)
             base_parent = base.__base__ if base is not None else None
             if base_parent is not None and issubclass(base_parent, YAMLBaseConfig):
@@ -82,7 +81,6 @@ def get_multi_constructor_for_vars(
                     "_tag attribute is missing",
                 ) from None
         if tag not in yaml_loader.yaml_config_classes:
-            # TODO test
             raise YAMLValueError(
                 f"Could not load the configuration for variable with tag {node.tag}",
                 node.start_mark,
@@ -90,7 +88,6 @@ def get_multi_constructor_for_vars(
             )
 
         if node.tag in yaml_loader.yaml_config_classes:
-            # TODO test
             existing = yaml_loader.yaml_config_classes[node.tag]
             existing_base = existing.__base__
             if (
@@ -98,7 +95,6 @@ def get_multi_constructor_for_vars(
                 and issubclass(existing_base, YAMLBaseConfig)
                 and tag != existing_base.get_yaml_tag()
             ):
-                # TODO test
                 raise YAMLValueError(
                     f"Could not load the configuration for variable with tag {node.tag}",
                     node.start_mark,
