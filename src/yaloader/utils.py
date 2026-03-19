@@ -12,7 +12,6 @@ def full_object_name(o: Any) -> str:
     return f"{o.__module__}.{o.__qualname__}"
 
 
-# TODO add types
 def remove_missing_errors(errors: list[ErrorDetails]) -> list[ErrorDetails]:
     """Recursively remove all errors which are :class:`pydantic.PydanticUndefinedAnnotation` from a list of errors.
 
