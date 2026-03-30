@@ -1,18 +1,22 @@
 
-Welcome to YAML Config's documentation!
+yaloader — YAML Configuration Loader
 =======================================
 
-The `yaloader` package provides an easy way to load instances of classes out of YAML configuration files.
-The configuration files can be layered to build hierarchical configurations.
+yaloader lets you define configuration classes in Python and load them from YAML files.
+Configurations can be layered with priorities, inherited through class hierarchies, and composed across multiple files.
 
 .. toctree::
    :maxdepth: 1
+   :caption: User Guide
 
    overview
    getting-started
-   configurations
-   loading-multiple-configurations
+   configuration-classes
+   loading-and-priority
    configuration-inheritance
+   variable-configs
+   cross-document-anchors
+   dumping
 
 
 .. toctree::

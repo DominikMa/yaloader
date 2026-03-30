@@ -28,59 +28,33 @@ setattr(
 )
 ```
 
-Getting started
+Getting Started
 =======================================
-
-Overview
----------------------------------------
-
-YaLoader is a YAML configuration system and loader which allows you to load different configurations 
-from multiple sources and merge them into a single configuration while taking priority, correctness, hierarchy and 
-inheritance into account. A configuration can be specified for any python object.
-
-Using YaLoader can be divided into three steps:
-defining possible configurations, 
-loading YAML files or strings holding configuration information, and
-constructing the final configuration for. 
 
 Installation
 ---------------------------------------
 
-YaLoader is distributed over [PyPI](https://pypi.org/project/yaloader/), so
+yaloader is on [PyPI](https://pypi.org/project/yaloader/):
+
 ```bash
 pip install yaloader
 ```
-is all you need.
 
 ````{tip}
-If you want to build the docs or run the tests, you can use
+For development, install with extras:
 ```bash
-pip install yaloader[docs,tests]
+pip install yaloader[dev]
 ```
-to install the additional needed dependencies. 
-
 ````
 
 
-Defining possible configurations
+Your first config
 ---------------------------------------
 
-
-
-Basic Examples
----------------------------------------
-
-### Loading a class
-
-Consider you have any class, and you want to configure and load it though a yaml file.
-For example a dataclass of a user:
+Suppose you have a class you want to configure from YAML:
 
 ```{code-cell} python3
----
-tags: [show-input]
----
 from dataclasses import dataclass
-from typing import Any
 
 @dataclass
 class User:
@@ -88,73 +62,92 @@ class User:
     name: str
 ```
 
-To load it from yaml, you first have to define its configuration.
+Define a configuration class for it:
+
 ```{code-cell} python3
----
-tags: [show-input]
----
 import yaloader
-    
+
 @yaloader.loads(User)
 class UserConfig(yaloader.YAMLBaseConfig):
     age: int
     name: str
 ```
 
-Now a loader can be used to load a string or file holding the classes' configuration.
+The `@yaloader.loads(User)` decorator registers `UserConfig` with the YAML tag `!User` (derived from the class name minus the `Config` suffix) and tells it to create `User` instances when `.load()` is called.
+
+
+Constructing from YAML
+---------------------------------------
+
+Use a `ConfigLoader` to parse YAML and construct the object:
+
 ```{code-cell} python3
----
-tags: [show-input]
----
 loader = yaloader.ConfigLoader()
-user_config = loader.construct_from_string("!User {age: 42, name: Alice}")
-print(type(user_config))
-print(user_config)
+config = loader.construct_from_string("!User {age: 42, name: Alice}")
+print(config)
 ```
 
-`user_config` now holds the configuration of the user.
-The user itself can be loaded using the `user_config.load()` method. 
+The config object holds the validated configuration. Call `.load()` to create the actual `User`:
+
 ```{code-cell} python3
----
-tags: [show-input]
----
-user = user_config.load()
-print(type(user))
+user = config.load()
 print(user)
 ```
 
 
-The loading is not limited to single configurations. Every valid YAML file, containing `!User` tags is fine.
+Lists of configs
+---------------------------------------
+
+You can construct multiple configs from a single YAML document:
+
 ```{code-cell} python3
----
-tags: [show-input]
----
 loader = yaloader.ConfigLoader()
-all_user_configs = loader.construct_from_string(
+users = loader.construct_from_string(
     """
     - !User {age: 42, name: Alice}
     - !User {age: 20, name: Bob}
     - !User {age: 12, name: Peter}
     """
 )
-print(all_user_configs)
+print(users)
 ```
 
-### Adding multiple configurations to the loader
-The configuration loader allows you to add multiple configurations for the same tag
-which will be layered while construction.
+
+Loading and layering
+---------------------------------------
+
+The real power of yaloader comes from loading configs from files and merging them.
+Here's a quick preview — see {doc}`loading-and-priority` for the full explanation.
+
+```{code-cell} python3
+loader = yaloader.ConfigLoader()
+
+# Load a base config
+loader.load_string(
+    """
+    - !User {age: 30, name: Default}
+    """
+)
+
+# Construct with the loaded defaults
+config = loader.construct_from_string("!User {}")
+print(config)
+```
+
+The `!User {}` in `construct_from_string` is an empty config — all fields come from the previously loaded data.
 
 
+Error messages
+---------------------------------------
 
+Thanks to Pydantic, type errors are caught early with clear messages:
 
-### Error messages
-Thanks to pydantic you also get nice error messages when an incorrect configuration will be loaded.
 ```{code-cell} python3
 ---
-tags: [show-input, raises-exception]
+tags: [raises-exception]
 ---
 try:
-    loader.construct_from_string("!User {age: 'Not an int', name: Alice}")
+    loader.construct_from_string("!User {age: 'not a number', name: Alice}")
 except yaloader.YAMLValueError as e:
     raise e from None
 ```
