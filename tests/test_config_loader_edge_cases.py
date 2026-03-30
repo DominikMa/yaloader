@@ -158,8 +158,85 @@ def test_add_config_data_invalid_entry_raises(yaml_loader):
         val: int = 0
 
     loader = ConfigLoader(yaml_loader=yaml_loader, cacheing=False)
-    with pytest.raises(ValueError, match="Entries in the config files must be"):
+    with pytest.raises(ValueError, match="Documents in config data must be"):
         loader.add_config_data(["not a dict or list"])
+
+
+def test_add_config_data_none_document_ignored(yaml_loader):
+    """None documents (empty YAML documents) are silently ignored."""
+
+    @yaloader.constructor.loads(yaml_loader=yaml_loader)
+    class NoneDocConfig(YAMLBaseConfig):
+        _yaml_tag = "!NoneDoc"
+        val: int = 0
+
+    loader = ConfigLoader(yaml_loader=yaml_loader, cacheing=False)
+    loader.add_config_data([None, [NoneDocConfig(val=1)], None])
+    result = loader.construct_from_string("!NoneDoc {}")
+    assert result == NoneDocConfig(val=1)
+
+
+def test_add_config_data_anchors_document(yaml_loader):
+    """Anchor-only dict documents are accepted and don't store configs."""
+
+    @yaloader.constructor.loads(yaml_loader=yaml_loader)
+    class AnchorDocConfig(YAMLBaseConfig):
+        _yaml_tag = "!AnchorDoc"
+        val: int = 0
+
+    loader = ConfigLoader(yaml_loader=yaml_loader, cacheing=False)
+    loader.load_string("anchors:\n  x: &x_val 42\n---\n- !AnchorDoc {val: *x_val}")
+    result = loader.construct_from_string("!AnchorDoc {}")
+    assert result == AnchorDocConfig(val=42)
+
+
+def test_add_config_data_combined_priority_anchors(yaml_loader):
+    """A dict with both 'priority' and 'anchors' keys is accepted."""
+
+    @yaloader.constructor.loads(yaml_loader=yaml_loader)
+    class ComboConfig(YAMLBaseConfig):
+        _yaml_tag = "!Combo"
+        val: int = 0
+
+    loader = ConfigLoader(yaml_loader=yaml_loader, cacheing=False)
+    loader.load_string("priority: 10\nanchors:\n  v: &v 99\n---\n- !Combo {val: *v}")
+    result = loader.construct_from_string("!Combo {}")
+    assert result == ComboConfig(val=99)
+
+
+def test_add_config_data_dict_without_priority_or_anchors_raises(yaml_loader):
+    """A dict without 'priority' or 'anchors' key raises ValueError."""
+    loader = ConfigLoader(yaml_loader=yaml_loader, cacheing=False)
+    with pytest.raises(ValueError, match="got extra keys"):
+        loader.add_config_data([{"something_else": 42}])
+
+
+def test_add_config_data_empty_dict_raises(yaml_loader):
+    """An empty dict raises ValueError."""
+    loader = ConfigLoader(yaml_loader=yaml_loader, cacheing=False)
+    with pytest.raises(ValueError, match="must contain a 'priority' and/or 'anchors' key"):
+        loader.add_config_data([{}])
+
+
+def test_add_config_data_dict_with_extra_keys_raises(yaml_loader):
+    """A dict with extra keys beyond 'priority'/'anchors' raises ValueError."""
+    loader = ConfigLoader(yaml_loader=yaml_loader, cacheing=False)
+    with pytest.raises(ValueError, match="got extra keys"):
+        loader.add_config_data([{"priority": 10, "unexpected": True}])
+
+
+def test_add_config_data_non_config_in_list_raises(yaml_loader):
+    """Non-YAMLBaseConfig items in a config list raise ValueError."""
+    loader = ConfigLoader(yaml_loader=yaml_loader, cacheing=False)
+    with pytest.raises(ValueError, match="Config lists must only contain YAMLBaseConfig"):
+        loader.add_config_data([[{"not": "a config"}]])
+
+
+def test_add_config_data_bare_scalar_raises(yaml_loader):
+    """Bare scalars (int, str) as documents raise ValueError."""
+    loader = ConfigLoader(yaml_loader=yaml_loader, cacheing=False)
+    with pytest.raises(ValueError, match="Documents in config data must be"):
+        loader.add_config_data([42])
 
 
 def test_add_single_config_string_non_config_raises(yaml_loader):

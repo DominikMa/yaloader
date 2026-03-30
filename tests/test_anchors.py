@@ -15,7 +15,8 @@ def test_anchor_single_document(config_loader, AConfig):
 def test_anchor_multiple_document(config_loader, AConfig):
     config_loader.load_string(
         """
-        - attribute: &name 1
+        anchors:
+            attribute: &name 1
         """
     )
     config_list = config_loader.construct_from_string(
@@ -53,7 +54,8 @@ def test_anchors_isolated_between_config_loaders(yaml_loader, AConfig):
     loader_a = ConfigLoader(yaml_loader=yaml_loader, cacheing=False)
     loader_a.load_string(
         """
-        - attribute: &shared 42
+        anchors:
+            attribute: &shared 42
         """
     )
 
@@ -73,7 +75,8 @@ def test_anchors_do_not_leak_back_to_parent_yaml_loader(yaml_loader, AConfig):
     loader = ConfigLoader(yaml_loader=yaml_loader, cacheing=False)
     loader.load_string(
         """
-        - attribute: &leaked 99
+        anchors:
+            attribute: &leaked 99
         """
     )
 
@@ -87,14 +90,16 @@ def test_two_loaders_same_anchor_name_independent(yaml_loader, AConfig):
     loader_a = ConfigLoader(yaml_loader=yaml_loader, cacheing=False)
     loader_a.load_string(
         """
-        - attribute: &val 10
+        anchors:
+            attribute: &val 10
         """
     )
 
     loader_b = ConfigLoader(yaml_loader=yaml_loader, cacheing=False)
     loader_b.load_string(
         """
-        - attribute: &val 20
+        anchors:
+            attribute: &val 20
         """
     )
 
@@ -143,12 +148,14 @@ def test_anchors_persist_across_multiple_load_string_calls(yaml_loader, AConfig)
     loader = ConfigLoader(yaml_loader=yaml_loader, cacheing=False)
     loader.load_string(
         """
-        - attribute: &first 1
+        anchors:
+            attribute: &first 1
         """
     )
     loader.load_string(
         """
-        - attribute: &second 2
+        anchors:
+            attribute: &second 2
         """
     )
 
@@ -170,7 +177,8 @@ def test_isolation_with_pre_existing_anchors_on_parent(yaml_loader, AConfig):
     loader_first = ConfigLoader(yaml_loader=yaml_loader, cacheing=False)
     loader_first.load_string(
         """
-        - attribute: &preexisting 77
+        anchors:
+            attribute: &preexisting 77
         """
     )
 
