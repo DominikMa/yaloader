@@ -260,23 +260,51 @@ class ConfigLoader:
         config_with_priority = ConfigWithPriority(config=config, priority=priority)
         self.add_config(config_with_priority)
 
-    def add_config_data(self, config_data: list[dict | list], priority: int | None = None) -> None:
-        """Add multiple configs or priorities."""
+    def add_config_data(self, config_data: list[dict | list | None], priority: int | None = None) -> None:
+        """Add multiple configs or priorities.
+
+        Each element in config_data corresponds to one YAML document and must be one of:
+
+        - ``None``: ignored (empty YAML document).
+        - ``dict`` with ``"priority"`` key: sets the priority (0-100) for subsequent config lists.
+        - ``dict`` with ``"anchors"`` key: ignored (anchors are resolved during YAML parsing).
+          A dict may contain both ``"priority"`` and ``"anchors"`` but no other keys.
+        - ``list`` of :class:`YAMLBaseConfig`: configs to store with the current priority.
+        """
+        _ALLOWED_DICT_KEYS = {"priority", "anchors"}
         given_priority = priority
         for config_element in config_data:
-            if isinstance(config_element, dict) and "priority" in config_element:
-                priority = config_element["priority"] if given_priority is None else given_priority
+            if config_element is None:
+                continue
+            elif isinstance(config_element, dict):
+                has_priority = "priority" in config_element
+                has_anchors = "anchors" in config_element
+                extra_keys = set(config_element.keys()) - _ALLOWED_DICT_KEYS
+                if extra_keys:
+                    raise ValueError(
+                        f"Dict documents in config data may only contain 'priority' and/or 'anchors' keys, "
+                        f"got extra keys: {extra_keys}"
+                    )
+                if not has_priority and not has_anchors:
+                    raise ValueError("Dict documents in config data must contain a 'priority' and/or 'anchors' key.")
+                if has_priority:
+                    priority = config_element["priority"] if given_priority is None else given_priority
             elif isinstance(config_element, list):
                 for config in config_element:
-                    if isinstance(config, YAMLBaseConfig):
-                        config_with_priority = ConfigWithPriority(
-                            config=config,
-                            priority=priority if priority is not None else 0,
+                    if not isinstance(config, YAMLBaseConfig):
+                        raise ValueError(
+                            f"Config lists must only contain YAMLBaseConfig instances, "
+                            f"got {type(config).__name__}: {config!r}"
                         )
-                        self.add_config(config_with_priority)
+                    config_with_priority = ConfigWithPriority(
+                        config=config,
+                        priority=priority if priority is not None else 0,
+                    )
+                    self.add_config(config_with_priority)
             else:
                 raise ValueError(
-                    "Entries in the config files must be mapping containing a priority key or a list of configs."
+                    f"Documents in config data must be a dict (with 'priority'/'anchors' key), "
+                    f"a list of configs, or None. Got {type(config_element).__name__}."
                 )
 
     def load_string(self, string: str, priority: int | None = None) -> None:
