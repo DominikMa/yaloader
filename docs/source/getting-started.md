@@ -51,15 +51,16 @@ pip install yaloader[dev]
 Your first config
 ---------------------------------------
 
-Suppose you have a class you want to configure from YAML:
+Suppose you have a class you want to configure from YAML — here, a simple optimizer:
 
 ```{code-cell} python3
-from dataclasses import dataclass
+class Optimizer:
+    def __init__(self, lr: float, momentum: float):
+        self.lr = lr
+        self.momentum = momentum
 
-@dataclass
-class User:
-    age: int
-    name: str
+    def __repr__(self):
+        return f"Optimizer(lr={self.lr}, momentum={self.momentum})"
 ```
 
 Define a configuration class for it:
@@ -67,87 +68,71 @@ Define a configuration class for it:
 ```{code-cell} python3
 import yaloader
 
-@yaloader.loads(User)
-class UserConfig(yaloader.YAMLBaseConfig):
-    age: int
-    name: str
+@yaloader.loads(Optimizer)
+class OptimizerConfig(yaloader.YAMLBaseConfig):
+    lr: float = 0.001
+    momentum: float = 0.9
 ```
 
-The `@yaloader.loads(User)` decorator registers `UserConfig` with the YAML tag `!User` (derived from the class name minus the `Config` suffix) and tells it to create `User` instances when `.load()` is called.
+The `@yaloader.loads(Optimizer)` decorator registers `OptimizerConfig` with the YAML tag `!Optimizer` (derived from the class name minus the `Config` suffix) and tells it to create `Optimizer` instances when `.load()` is called.
 
 
 Constructing from YAML
 ---------------------------------------
 
-Use a `ConfigLoader` to parse YAML and construct the object:
+Use a `ConfigLoader` to parse YAML and construct the config:
 
 ```{code-cell} python3
 loader = yaloader.ConfigLoader()
-config = loader.construct_from_string("!User {age: 42, name: Alice}")
+config = loader.construct_from_string("!Optimizer {lr: 0.01, momentum: 0.95}")
 print(config)
 ```
 
-The config object holds the validated configuration. Call `.load()` to create the actual `User`:
+The config object holds the validated configuration. Call `.load()` to create the actual `Optimizer`:
 
 ```{code-cell} python3
-user = config.load()
-print(user)
-```
-
-
-Lists of configs
----------------------------------------
-
-You can construct multiple configs from a single YAML document:
-
-```{code-cell} python3
-loader = yaloader.ConfigLoader()
-users = loader.construct_from_string(
-    """
-    - !User {age: 42, name: Alice}
-    - !User {age: 20, name: Bob}
-    - !User {age: 12, name: Peter}
-    """
-)
-print(users)
+optimizer = config.load()
+print(optimizer)
 ```
 
 
 Loading and layering
 ---------------------------------------
 
-The real power of yaloader comes from loading configs from files and merging them.
+The real power of yaloader comes from loading configs from multiple sources and merging them.
+Imagine you have base defaults in one file and per-experiment overrides in another.
 Here's a quick preview — see {doc}`loading-and-priority` for the full explanation.
 
 ```{code-cell} python3
 loader = yaloader.ConfigLoader()
 
-# Load a base config
+# Load base defaults
 loader.load_string(
     """
-    - !User {age: 30, name: Default}
+    - !Optimizer {lr: 0.001, momentum: 0.9}
     """
 )
 
-# Construct with the loaded defaults
-config = loader.construct_from_string("!User {}")
+# Construct with the loaded defaults — no fields needed
+config = loader.construct_from_string("!Optimizer {}")
 print(config)
 ```
 
-The `!User {}` in `construct_from_string` is an empty config — all fields come from the previously loaded data.
+The `!Optimizer {}` in `construct_from_string` is an empty config — all fields come from the previously loaded data.
+You can layer multiple sources with different priorities to build up complex configurations from simple, reusable parts.
 
 
 Error messages
 ---------------------------------------
 
-Thanks to Pydantic, type errors are caught early with clear messages:
+Thanks to Pydantic, type errors are caught early with clear messages — before your training run starts, not hours into it:
 
 ```{code-cell} python3
 ---
 tags: [raises-exception]
 ---
 try:
-    loader.construct_from_string("!User {age: 'not a number', name: Alice}")
+    loader.construct_from_string("!Optimizer {lr: 'fast', momentum: 0.9}")
 except yaloader.YAMLValueError as e:
     raise e from None
 ```

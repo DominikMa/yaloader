@@ -34,6 +34,8 @@ Configuration Inheritance
 yaloader config classes can inherit from each other just like regular Python classes.
 When a config is constructed, fields from its parent configs are included automatically.
 
+This mirrors how ML pipelines are structured: all models share training parameters like `epochs` and `batch_size`, but each model family adds its own architecture-specific fields.
+
 
 Basic inheritance
 ---------------------------------------
@@ -68,6 +70,25 @@ print(f"name={config.name}, epochs={config.epochs}, layers={config.layers}")
 
 The `epochs` value comes from the loaded `!Model` config — inherited fields are resolved through the class hierarchy.
 
+This means you can define shared training parameters under `!Model` and architecture-specific settings under `!ResNet`, `!MLP`, etc.:
+
+```{code-cell} python3
+@yaloader.loads()
+class MLPConfig(ModelConfig):
+    hidden_dim: int = 128
+    num_layers: int = 3
+
+loader = yaloader.ConfigLoader()
+loader.load_string("- !Model {epochs: 50}")
+
+resnet = loader.construct_from_string("!ResNet {name: resnet50, layers: 50}")
+mlp = loader.construct_from_string("!MLP {name: small-mlp, hidden_dim: 64}")
+print(f"ResNet: epochs={resnet.epochs}, layers={resnet.layers}")
+print(f"MLP: epochs={mlp.epochs}, hidden_dim={mlp.hidden_dim}")
+```
+
+Both models inherit `epochs: 50` from the `!Model` config.
+
 
 Field resolution order
 ---------------------------------------
@@ -88,7 +109,11 @@ loader = yaloader.ConfigLoader()
 loader.load_string("- !Model {name: BaseModel, epochs: 50}")
 
 # ResNet config at priority 10
-loader.load_string("priority: 10\n---\n- !ResNet {layers: 152}")
+loader.load_string(r"""
+priority: 10
+---
+- !ResNet {layers: 152}
+""")
 
 config = loader.construct_from_string("!ResNet {name: MyResNet}")
 print(f"name={config.name}, epochs={config.epochs}, layers={config.layers}")

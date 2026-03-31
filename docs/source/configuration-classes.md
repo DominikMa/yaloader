@@ -32,6 +32,7 @@ Configuration Classes
 =======================================
 
 Every yaloader configuration is a Python class that inherits from `YAMLBaseConfig` and is registered with the `@yaloader.loads` decorator.
+We saw a simple `OptimizerConfig` in {doc}`getting-started`. Now let's look at config classes in more depth.
 
 
 The `@loads` decorator
@@ -40,13 +41,15 @@ The `@loads` decorator
 The `@yaloader.loads` decorator registers a config class so it can be loaded from YAML:
 
 ```{code-cell} python3
-from dataclasses import dataclass
 import yaloader
 
-@dataclass
 class Optimizer:
-    lr: float
-    momentum: float
+    def __init__(self, lr: float, momentum: float):
+        self.lr = lr
+        self.momentum = momentum
+
+    def __repr__(self):
+        return f"Optimizer(lr={self.lr}, momentum={self.momentum})"
 
 @yaloader.loads(Optimizer)
 class OptimizerConfig(yaloader.YAMLBaseConfig):
@@ -63,8 +66,8 @@ YAML tags
 Each config class is identified by a YAML tag. By default, the tag is derived from the class name by removing the `Config` suffix and adding a `!` prefix:
 
 - `OptimizerConfig` → `!Optimizer`
-- `UserConfig` → `!User`
-- `ResNet50Config` → `!ResNet50`
+- `ResNetConfig` → `!ResNet`
+- `DatasetConfig` → `!Dataset`
 
 If the class name doesn't end with `Config`, registration will fail. You can set a custom tag explicitly:
 
@@ -89,19 +92,35 @@ print(optimizer)
 ```
 
 The default `load()` passes all config fields as keyword arguments to the loaded class.
-For more control, override it:
+For more control, override it. This is useful when constructing the object requires more than just passing fields — for example, conditional initialization or transforming config values:
 
 ```{code-cell} python3
+class ResNet:
+    def __init__(self, layers: int, pretrained_weights: str | None = None):
+        self.layers = layers
+        self.pretrained_weights = pretrained_weights
+
+    def __repr__(self):
+        return f"ResNet(layers={self.layers}, weights={self.pretrained_weights})"
+
 @yaloader.loads()
-class CustomOptimizerConfig(yaloader.YAMLBaseConfig):
-    _yaml_tag = "!CustomOptimizer"
-    lr: float = 0.01
-    momentum: float = 0.9
+class ResNetConfig(yaloader.YAMLBaseConfig):
+    layers: int = 50
+    pretrained: bool = False
 
     def load(self):
-        print(f"Creating optimizer with lr={self.lr}")
-        return Optimizer(lr=self.lr, momentum=self.momentum)
+        weights = f"resnet{self.layers}.pth" if self.pretrained else None
+        return ResNet(layers=self.layers, pretrained_weights=weights)
 ```
+
+```{code-cell} python3
+loader = yaloader.ConfigLoader()
+config = loader.construct_from_string("!ResNet {layers: 101, pretrained: true}")
+model = config.load()
+print(model)
+```
+
+The `load()` override decouples config fields from constructor arguments — the config can have a `pretrained` boolean while the constructor takes a `pretrained_weights` path.
 
 
 Type validation
@@ -142,19 +161,19 @@ This catches typos and outdated config files early.
 Nested configs
 ---------------------------------------
 
-Config fields can reference other config classes. When constructing, yaloader recursively resolves nested configs:
+Config fields can reference other config classes. When constructing, yaloader recursively resolves nested configs.
+This is how you build composed pipelines — a trainer config that contains an optimizer and a model:
 
 ```{code-cell} python3
 @yaloader.loads()
-class LayerConfig(yaloader.YAMLBaseConfig):
-    units: int = 64
-
-@yaloader.loads()
-class NetworkConfig(yaloader.YAMLBaseConfig):
+class TrainerConfig(yaloader.YAMLBaseConfig):
     name: str = "default"
-    layer: LayerConfig = LayerConfig()
+    optimizer: OptimizerConfig = OptimizerConfig()
+    model: ResNetConfig = ResNetConfig()
 
 loader = yaloader.ConfigLoader()
-result = loader.construct_from_string('!Network {name: "mynet", layer: !Layer {units: 128}}')
+result = loader.construct_from_string(
+    '!Trainer {name: "run_01", optimizer: !Optimizer {lr: 0.01}, model: !ResNet {layers: 18}}'
+)
 print(result)
 ```

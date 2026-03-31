@@ -33,6 +33,8 @@ Loading & Priority
 
 yaloader separates **loading** (collecting config data) from **construction** (merging and building the final config). This page covers the loading side.
 
+In a typical ML project, configs come from multiple sources: base defaults, dataset-specific settings, machine-specific paths, and debug overrides. yaloader's priority system lets you layer these naturally.
+
 
 Loading methods
 ---------------------------------------
@@ -41,12 +43,13 @@ There are three ways to load config data into a `ConfigLoader`:
 
 ```{code-cell} python3
 import yaloader
+from pathlib import Path
 
 @yaloader.loads()
-class ServerConfig(yaloader.YAMLBaseConfig):
-    host: str = "localhost"
-    port: int = 8080
-    workers: int = 4
+class TrainingConfig(yaloader.YAMLBaseConfig):
+    epochs: int = 10
+    batch_size: int = 32
+    learning_rate: float = 0.001
 ```
 
 ### From a string
@@ -55,7 +58,7 @@ class ServerConfig(yaloader.YAMLBaseConfig):
 loader = yaloader.ConfigLoader()
 loader.load_string(
     """
-    - !Server {host: "0.0.0.0", port: 9090}
+    - !Training {epochs: 100, batch_size: 64}
     """
 )
 ```
@@ -87,8 +90,8 @@ A YAML file (or string) loaded via `load_string` / `load_file` can contain multi
 A YAML list where every item is a tagged config object:
 
 ```yaml
-- !Server {host: "0.0.0.0", port: 9090}
-- !Server {workers: 8}
+- !Training {epochs: 100, batch_size: 64}
+- !Training {learning_rate: 0.01}
 ```
 
 ### Priority document
@@ -98,7 +101,7 @@ A dict with a `priority` key (integer 0–100). Sets the priority for all config
 ```yaml
 priority: 10
 ---
-- !Server {host: "0.0.0.0"}
+- !Training {epochs: 200}
 ```
 
 ### Anchors document
@@ -107,9 +110,9 @@ A dict with an `anchors` key. The content under `anchors` is arbitrary — it ex
 
 ```yaml
 anchors:
-    default_host: &host "0.0.0.0"
+    base_lr: &lr 0.001
 ---
-- !Server {host: *host}
+- !Training {learning_rate: *lr}
 ```
 
 A document can combine both `priority` and `anchors`:
@@ -117,9 +120,9 @@ A document can combine both `priority` and `anchors`:
 ```yaml
 priority: 10
 anchors:
-    default_host: &host "0.0.0.0"
+    base_lr: &lr 0.001
 ---
-- !Server {host: *host}
+- !Training {learning_rate: *lr}
 ```
 
 No other keys are allowed in dict documents — unexpected keys raise a `ValueError`.
@@ -131,20 +134,71 @@ The priority system
 
 When multiple configs exist for the same tag, they are merged by priority. Higher priority values win over lower ones.
 
+Think of priorities as configuration layers:
+
 ```{code-cell} python3
+@yaloader.loads()
+class DataLoaderConfig(yaloader.YAMLBaseConfig):
+    batch_size: int = 32
+    num_workers: int = 4
+    data_root: str = "/data"
+
 loader = yaloader.ConfigLoader()
 
-# Base defaults at priority 0 (the default)
-loader.load_string("- !Server {host: localhost, port: 8080, workers: 4}")
+# Base defaults (priority 1)
+loader.load_string(r"""
+priority: 1
+---
+- !Training {epochs: 100, batch_size: 64, learning_rate: 0.001}
+- !DataLoader {batch_size: 64, num_workers: 4}
+""")
 
-# Production overrides at priority 10
-loader.load_string("priority: 10\n---\n- !Server {host: '0.0.0.0', workers: 16}")
+# Machine-specific paths (priority 2) — different per workstation
+loader.load_string(r"""
+priority: 2
+---
+- !DataLoader {data_root: "/ssd1/datasets", num_workers: 8}
+""")
 
-config = loader.construct_from_string("!Server {}")
-print(f"host={config.host}, port={config.port}, workers={config.workers}")
+config = loader.construct_from_string("!DataLoader {}")
+print(f"batch_size={config.batch_size}, num_workers={config.num_workers}, data_root={config.data_root}")
 ```
 
-The `host` and `workers` come from the priority-10 config, while `port` falls back to the priority-0 default.
+The `data_root` and `num_workers` come from the machine-specific config (priority 2), while `batch_size` falls back to the base defaults (priority 1).
+
+A typical real-world layout:
+
+```
+configs/
+  base.yaml               # priority: 1 — shared defaults
+  dataset/
+    imagenet.yaml          # dataset-specific settings
+    cifar10.yaml
+  pc/
+    workstation_01.yaml    # priority: 2 — machine paths, worker counts
+    cluster_gpu.yaml
+  debug.yaml               # priority: 98 — small batches, few iterations
+```
+
+
+### Debug overrides
+
+A common pattern is a debug config with a high priority that overrides everything for quick testing:
+
+```{code-cell} python3
+# Debug override (priority 98) — small batches, few iterations
+loader.load_string(r"""
+priority: 98
+---
+- !Training {epochs: 2, batch_size: 4}
+- !DataLoader {batch_size: 4}
+""")
+
+config = loader.construct_from_string("!Training {}")
+print(f"epochs={config.epochs}, batch_size={config.batch_size}")
+```
+
+Load the debug file only during development — in production, leave it out and the base defaults apply.
 
 
 ### Priority scoping
@@ -169,17 +223,25 @@ During merging, explicit fields always win over defaults, regardless of priority
 ```{code-cell} python3
 loader = yaloader.ConfigLoader()
 
-# Priority 0: sets port explicitly
-loader.load_string("- !Server {port: 3000}")
+# Priority 1: sets learning_rate explicitly
+loader.load_string(r"""
+priority: 1
+---
+- !Training {learning_rate: 0.01}
+""")
 
-# Priority 10: only sets host explicitly (port not mentioned, stays at default 8080)
-loader.load_string("priority: 10\n---\n- !Server {host: production.example.com}")
+# Priority 10: only sets epochs explicitly (learning_rate not mentioned, stays at default 0.001)
+loader.load_string(r"""
+priority: 10
+---
+- !Training {epochs: 200}
+""")
 
-config = loader.construct_from_string("!Server {}")
-print(f"host={config.host}, port={config.port}")
+config = loader.construct_from_string("!Training {}")
+print(f"epochs={config.epochs}, lr={config.learning_rate}")
 ```
 
-Even though the priority-10 config has a higher priority, the `port` from the priority-0 config wins because it was explicitly set, while the priority-10 config's `port` is just the class default.
+Even though the priority-10 config has a higher priority, the `learning_rate` from the priority-1 config wins because it was explicitly set, while the priority-10 config's `learning_rate` is just the class default.
 
 
 ### Full resolution order
@@ -202,7 +264,7 @@ After loading, use one of these to build the final object:
 Parses a single YAML document and deeply constructs it:
 
 ```{code-cell} python3
-config = loader.construct_from_string("!Server {port: 5000}")
+config = loader.construct_from_string("!Training {batch_size: 256}")
 print(config)
 ```
 
@@ -211,7 +273,7 @@ print(config)
 Same as above but reads from a file:
 
 ```python
-config = loader.construct_from_file(Path("serve.yaml"))
+config = loader.construct_from_file(Path("experiment.yaml"))
 ```
 
 Both methods merge the given config with all previously loaded data and recursively construct any nested configs.

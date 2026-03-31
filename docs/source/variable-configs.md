@@ -31,14 +31,18 @@ setattr(
 Variable Configs
 =======================================
 
-Variable configs let you create **named presets** for a config class directly in YAML — without writing new Python classes.
-This is useful when you want several variations of the same config (e.g. "small", "medium", "large" model sizes).
+The problem
+---------------------------------------
+
+Without variable configs, each config class has exactly **one tag** — `OptimizerConfig` is always `!Optimizer`. That means you can only configure one optimizer in your config files. If your pipeline needs two — say, one for training and one for fine-tuning — you'd have to pass the differences at the `construct_from_string` call, which defeats the purpose of file-based configuration.
+
+Variable configs solve this by letting you define **multiple distinct configurations of the same class** directly in YAML, each with its own tag.
 
 
 The `!ConfigVar` prefix
 ---------------------------------------
 
-Any YAML tag starting with `!ConfigVar` is treated as a variable config. You specify which base config it derives from using the `_tag` field:
+Any YAML tag starting with `!ConfigVar` is treated as a variable config. You specify which base config it maps to using the `_tag` field:
 
 ```{code-cell} python3
 import yaloader
@@ -49,41 +53,93 @@ class OptimizerConfig(yaloader.YAMLBaseConfig):
     momentum: float = 0.9
 
 loader = yaloader.ConfigLoader()
-result = loader.construct_from_string(
+
+# Define two distinct optimizer configurations
+loader.load_string(
     """
-    - !Optimizer {lr: 0.01}
-    - !ConfigVarSGD {_tag: "!Optimizer", lr: 0.1, momentum: 0.95}
-    - !ConfigVarAdam {_tag: "!Optimizer", lr: 0.001}
+    - !ConfigVarTrainOptimizer {_tag: "!Optimizer", lr: 0.01, momentum: 0.9}
+    - !ConfigVarFineTuneOptimizer {_tag: "!Optimizer", lr: 0.0001, momentum: 0.0}
     """
 )
-for r in result:
-    print(f"lr={r.lr}, momentum={r.momentum}")
 ```
 
-`!ConfigVarSGD` and `!ConfigVarAdam` are both variants of `!Optimizer` with different default overrides. No new Python class is needed.
-
-
-Named presets with loading
----------------------------------------
-
-Variable configs become powerful when combined with the loading system. You can define presets in config files and reference them later:
+Now your pipeline can reference each one independently:
 
 ```{code-cell} python3
+train_opt = loader.construct_from_string('!ConfigVarTrainOptimizer {_tag: "!Optimizer"}')
+finetune_opt = loader.construct_from_string('!ConfigVarFineTuneOptimizer {_tag: "!Optimizer"}')
+print(f"Train: lr={train_opt.lr}, momentum={train_opt.momentum}")
+print(f"Fine-tune: lr={finetune_opt.lr}, momentum={finetune_opt.momentum}")
+```
+
+Both are `OptimizerConfig` instances, but configured differently — and each can be independently overridden via priority layering.
+
+
+Multiple instances in a pipeline
+---------------------------------------
+
+This is essential when a pipeline needs multiple instances of the same class. For example, a training runner that uses separate dataset configs for training and testing:
+
+```{code-cell} python3
+@yaloader.loads()
+class DatasetConfig(yaloader.YAMLBaseConfig):
+    name: str = "unnamed"
+    root: str = "/data"
+    split: str = "train"
+
+@yaloader.loads()
+class RunnerConfig(yaloader.YAMLBaseConfig):
+    name: str = "default"
+    train_dataset: DatasetConfig = DatasetConfig()
+    test_dataset: DatasetConfig = DatasetConfig()
+
 loader = yaloader.ConfigLoader()
 
-# Register a named preset
-loader.add_single_config_string("!ConfigVarFastOpt {_tag: '!Optimizer', lr: 0.1, momentum: 0.99}", priority=1)
+# runner.yaml — references two distinct dataset configs
+loader.load_string(
+    """
+    - !Runner
+        train_dataset: !ConfigVarTrainDataset {_tag: "!Dataset"}
+        test_dataset: !ConfigVarTestDataset {_tag: "!Dataset"}
+    """
+)
 
-# Construct using the preset — fields come from the loaded preset
-result = loader.construct_from_string("!ConfigVarFastOpt {_tag: '!Optimizer'}")
-print(f"lr={result.lr}, momentum={result.momentum}")
+# dataset/cifar10.yaml — configures both splits
+loader.load_string(
+    """
+    - !ConfigVarTrainDataset {_tag: "!Dataset", name: cifar10, root: /data/cifar10, split: train}
+    - !ConfigVarTestDataset {_tag: "!Dataset", name: cifar10, root: /data/cifar10, split: test}
+    """
+)
+
+runner = loader.construct_from_string("!Runner {name: experiment_01}")
+print(f"Train: {runner.train_dataset.name} ({runner.train_dataset.split})")
+print(f"Test: {runner.test_dataset.name} ({runner.test_dataset.split})")
+```
+
+Without variable configs, both datasets would share a single `!Dataset` config — you couldn't set different splits.
+
+To switch to a different dataset, just load a different file that redefines `!ConfigVarTrainDataset` and `!ConfigVarTestDataset`:
+
+```{code-cell} python3
+# dataset/imagenet.yaml — same ConfigVar tags, different implementation
+loader.load_string(
+    """
+    - !ConfigVarTrainDataset {_tag: "!Dataset", name: imagenet, root: /data/imagenet, split: train}
+    - !ConfigVarTestDataset {_tag: "!Dataset", name: imagenet, root: /data/imagenet, split: val}
+    """
+)
+
+runner = loader.construct_from_string("!Runner {name: experiment_02}")
+print(f"Train: {runner.train_dataset.name} ({runner.train_dataset.split})")
+print(f"Test: {runner.test_dataset.name} ({runner.test_dataset.split})")
 ```
 
 
 Chaining variable configs
 ---------------------------------------
 
-Variable configs can reference other variable configs, creating a chain of presets:
+Variable configs can reference other variable configs, creating a chain:
 
 ```{code-cell} python3
 loader = yaloader.ConfigLoader()
@@ -97,6 +153,17 @@ loader.add_single_config_string("!ConfigVarDerived {_tag: '!ConfigVarBase', mome
 result = loader.construct_from_string("!ConfigVarDerived {_tag: '!ConfigVarBase'}")
 print(f"lr={result.lr}, momentum={result.momentum}")
 ```
+
+
+Variable configs vs Python subclasses
+---------------------------------------
+
+When should you use a variable config vs a Python subclass?
+
+- **Variable config** — when you need multiple configurations of the same class. The `load()` logic stays the same, only field values differ. Each variant gets its own tag that can be independently configured via priority layering.
+- **Python subclass** — when the variant changes behavior (different `load()` logic or additional fields). For example, a `DatasetLoaderConfig` whose `load()` method transforms nested configs into loaded objects differently than its parent.
+
+Rule of thumb: if you need multiple instances with different values, use variable configs. If you need different behavior, write a subclass.
 
 
 Validation
