@@ -34,13 +34,13 @@ Cross-Document Anchors
 Standard YAML anchors (`&name` / `*name`) only work within a single document.
 yaloader extends this so that anchors persist across documents and even across multiple `load_string` calls on the same `ConfigLoader`.
 
-This is useful for values that must stay consistent across multiple configs — for example, an image size shared between a dataset's preprocessing and a model's input layer, or a learning rate used by both the optimizer and a scheduler.
+This is the primary way to maintain a **Single Source of Truth** for hyper-parameters shared between unrelated components.
 
 
-Anchors within a file
+Use Case: Shared Image Size
 ---------------------------------------
 
-Use an `anchors` document to define anchors, then reference them in config lists that follow:
+Imagine you have a `Dataset` that pre-processes images to a certain size and a `Model` that expects that exact same size as input.
 
 ```{code-cell} python3
 import yaloader
@@ -56,86 +56,74 @@ class ModelConfig(yaloader.YAMLBaseConfig):
     input_size: int = 224
 
 loader = yaloader.ConfigLoader()
+
+# First document: Define the shared values
 loader.load_string(r"""
 anchors:
-  image_size: &img_size 350
----
-- !Dataset {name: imagenet, image_size: *img_size}
-- !Model {name: resnet, input_size: *img_size}
+  shared_size: &img_size 299
+""")
+
+# Second document (can be a different file!): Use the shared values
+loader.load_string(r"""
+- !Dataset {image_size: *img_size}
+- !Model {input_size: *img_size}
 """)
 
 ds = loader.construct_from_string("!Dataset {}")
 model = loader.construct_from_string("!Model {}")
-print(f"dataset image_size={ds.image_size}, model input_size={model.input_size}")
+print(f"Dataset image_size={ds.image_size}")
+print(f"Model input_size={model.input_size}")
 ```
 
-By defining `&img_size` once, you guarantee the dataset and model always use the same image size. Change it in one place, both update.
+By using `*img_size`, you ensure the two components are always in sync. If you change the anchor in the first document, both components update automatically.
 
 
-Anchors across load calls
+Workflow: Centralized `anchors.yaml`
 ---------------------------------------
 
-Anchors defined in one `load_string` call are available in subsequent calls on the **same** `ConfigLoader`:
+A common pattern for large projects is to have a centralized file for global hyper-parameters.
 
-```{code-cell} python3
-loader = yaloader.ConfigLoader()
-
-# First call: define shared values
-loader.load_string(r"""
+**`anchors.yaml`**
+```yaml
 anchors:
-  image_size: &img_size 400
-""")
-
-# Second call: use them
-loader.load_string("- !Dataset {image_size: *img_size}")
-
-config = loader.construct_from_string("!Dataset {}")
-print(f"image_size={config.image_size}")
+  global_lr: &lr 0.001
+  global_batch_size: &batch 64
 ```
 
-This means you can define anchors in a shared file (e.g. `anchors.yaml`) and reference them in separate config files loaded afterwards.
+**`trainer.yaml`**
+```yaml
+- !Trainer
+    learning_rate: *lr
+    batch_size: *batch
+```
+
+**`main.py`**
+```python
+loader = yaloader.ConfigLoader()
+loader.load_file("anchors.yaml")
+loader.load_file("trainer.yaml")
+```
 
 
 Isolation between loaders
 ---------------------------------------
 
-Each `ConfigLoader` instance has its own anchor scope. Anchors from one loader do not leak into another:
+Each `ConfigLoader` instance has its own isolated anchor scope. This is important for running multiple experiments in parallel without naming collisions.
 
 ```{code-cell} python3
 loader_a = yaloader.ConfigLoader()
-loader_a.load_string(r"""
-anchors:
-  value: &val 42
-""")
+loader_a.load_string("anchors: { val: &v 42 }")
 
 loader_b = yaloader.ConfigLoader()
-# loader_b does NOT have access to &val from loader_a
+# loader_b does NOT have access to &v from loader_a.
+# This prevents "leaks" between different experiments.
 ```
 
-This means you can safely use multiple `ConfigLoader` instances — for example, one per experiment — without worrying about name collisions.
 
-
-Anchors in `construct_from_string`
+Summary
 ---------------------------------------
 
-Anchors can also be defined inline when constructing:
-
-```{code-cell} python3
-@yaloader.loads()
-class OptimizerConfig(yaloader.YAMLBaseConfig):
-    lr: float = 0.001
-
-@yaloader.loads()
-class SchedulerConfig(yaloader.YAMLBaseConfig):
-    base_lr: float = 0.001
-
-loader = yaloader.ConfigLoader()
-result = loader.construct_from_string(
-    """
-    - !Optimizer {lr: &lr 0.01}
-    - !Scheduler {base_lr: *lr}
-    """
-)
-for r in result:
-    print(r)
-```
+Cross-document anchors are a powerful tool for:
+1.  **Ensuring consistency** between decoupled components (e.g., Model and Dataset).
+2.  **Centralizing configuration** of global parameters in a single file.
+3.  **Maintaining clean YAML** by avoiding repetitive hard-coded values.

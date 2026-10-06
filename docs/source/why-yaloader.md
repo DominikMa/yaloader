@@ -10,96 +10,57 @@ kernelspec:
 Why yaloader?
 =======================================
 
-There are many configuration libraries for Python. Here is how yaloader relates to the most common ones, and when you might prefer it.
+yaloader is not just another YAML parser. It implements a **Layered Component Registry** pattern for Python. It is designed for applications where you have a hierarchy of interchangeable components and want a clean, type-safe way to configure them.
 
 
-At a glance
+The Core Philosophies
 ---------------------------------------
 
-| Feature | yaloader | Hydra | Pydantic Settings | OmegaConf | Gin |
-|---|---|---|---|---|---|
-| Type-safe configs | Pydantic v2 | Structured Configs (opt.) | Pydantic v2 | Limited | No |
-| Object instantiation | `config.load()` | `instantiate(_target_=...)` | No | No | `@gin.configurable` |
-| Config inheritance | Python class hierarchy | YAML defaults list | No | No | No |
-| Priority merging | Built-in (0–100) | Override grammar | No | `OmegaConf.merge` | No |
-| CLI overrides | No | Yes | env vars | No | `--gin_bindings` |
-| Experiment tracking | No | No | No | No | No |
+### 1. Late Binding vs. Hardcoded References
+
+Most configuration libraries force you to hardcode your component logic. You either pass dictionaries around manually or use string references (like Hydra's `_target_`).
+
+**yaloader uses Late Binding.** You define your components in Python using the `@yaloader.loads` decorator. When you load a YAML file, yaloader "binds" the configuration data to these components based on their tags. This means your code only asks for a `!Trainer`, and the YAML file decides whether that `!Trainer` uses a `!ResNet` or a `!Transformer`.
+
+### 2. The "Sticky" Explicit Values Rule
+
+In many configuration systems, a "High Priority" document resets everything to its default value. This makes it hard to manage "thin" override layers.
+
+**yaloader tracks whether a field was explicitly set in YAML.**
+*   If you set `learning_rate: 0.01` in a base YAML file (Priority 1)...
+*   And you set `epochs: 100` in an override YAML file (Priority 10)...
+*   The final configuration will have **both** `learning_rate: 0.01` and `epochs: 100`.
+
+Higher priority documents do not reset unrelated fields back to their class defaults. This allows you to stack dozens of specialized configuration layers without losing your baseline settings.
+
+### 3. Isolated State
+
+Each `ConfigLoader` instance has its own isolated registry state and anchor scope. This means you can manage different configuration "worlds" (e.g., one for production, one for testing) in the same Python process without them leaking into each other.
+
+
+Comparison at a glance
+---------------------------------------
+
+| Feature | yaloader | Hydra | OmegaConf | Gin |
+|---|---|---|---|---|
+| **Type-safe configs** | Pydantic v2 | Optional | Limited | No |
+| **Binding Mechanism** | Python Decorators | Runtime Strings | None | Functions |
+| **IDE / Refactor support** | Yes | Limited | No | Limited |
+| **Merging logic** | Explicit-field tracking | Priority-based | Dict merging | Injection |
+| **Late Binding** | Yes | Yes | No | Yes |
 
 
 vs Hydra
 ---------------------------------------
 
-[Hydra](https://hydra.cc/) is the most common comparison point. Both tools load YAML configs and instantiate Python objects, but the coupling mechanism differs fundamentally.
+Hydra is the closest comparison. While both load YAML and instantiate objects, the coupling differs:
 
-**Hydra** uses string-based `_target_` references resolved at runtime:
+*   **Hydra** uses `_target_: torch.optim.Adam`. This is a string that can break if you rename your class or move your module.
+*   **yaloader** uses `@yaloader.loads(Adam)`. This is a direct Python reference. If you rename your class in your IDE, the binding stays intact.
 
-```yaml
-# Hydra config
-optimizer:
-  _target_: torch.optim.Adam
-  lr: 0.001
-```
+**Choose yaloader if:** You want a clean, Python-native registry where your configurations are validated by Pydantic and your IDE can help you navigate.
 
-```python
-# Hydra instantiation
-optimizer = hydra.utils.instantiate(cfg.optimizer)
-```
-
-**yaloader** couples at the Python class level:
-
-```python
-# yaloader config
-@yaloader.loads(torch.optim.Adam)
-class AdamConfig(yaloader.YAMLBaseConfig):
-    lr: float = 0.001
-```
-
-```yaml
-# yaloader YAML
-- !Adam {lr: 0.001}
-```
-
-The key difference: yaloader's `@loads(Adam)` binding is checked by the IDE and type checker. Hydra's `_target_: torch.optim.Adam` is a string that can silently break on rename or import change.
-
-**When to choose Hydra:** You need CLI overrides (`python train.py optimizer.lr=0.01`), multi-run sweeps, or plugin-based experiment launchers. Hydra's ecosystem is large and well-supported.
-
-**When to choose yaloader:** You want type-safe config classes with IDE support, priority-based merging, and Python-native inheritance. You don't need CLI overrides or sweep frameworks.
-
-
-vs Pydantic Settings
----------------------------------------
-
-[Pydantic Settings](https://docs.pydantic.dev/latest/concepts/pydantic_settings/) manages application settings from environment variables, `.env` files, and other sources. yaloader manages object construction from structured YAML.
-
-These solve different problems and can complement each other:
-- Use **Pydantic Settings** for infrastructure and deployment config (database URLs, API keys, feature flags).
-- Use **yaloader** for pipeline configuration where configs define complex object hierarchies (models, optimizers, datasets).
-
-
-vs OmegaConf
----------------------------------------
-
-[OmegaConf](https://omegaconf.readthedocs.io/) provides dict-like config containers with dot access, interpolation, and structured merge semantics. It's the backend powering Hydra.
-
-yaloader provides Pydantic models with full validation and direct object instantiation via `load()`. Where OmegaConf gives you a flexible container you pass around, yaloader gives you typed config objects that create real Python objects.
-
-
-vs Gin-config
----------------------------------------
-
-[Gin](https://github.com/google/gin-config) by Google binds configuration to functions via decorators. It's lightweight and popular in research code.
-
-The key difference is explicitness: Gin injects config values into function calls implicitly (you call `train()` and Gin fills in the parameters). yaloader constructs config objects explicitly — you construct them, then call `.load()`.
-
-Gin has no type validation. yaloader validates every field via Pydantic v2.
-
-
-vs Sacred / MLflow
----------------------------------------
-
-[Sacred](https://sacred.readthedocs.io/) and [MLflow](https://mlflow.org/) are experiment tracking frameworks, not configuration libraries. They log parameters, metrics, and artifacts for reproducibility.
-
-yaloader is purely config management — it doesn't track experiments. But the two work well together: use yaloader to build your configs, then dump them to YAML (see {doc}`dumping`) and log the output with Sacred or MLflow.
+**Choose Hydra if:** You need advanced CLI override grammar (`python train.py lr=0.1,0.2,0.5`), multi-run sweeps, or its large ecosystem of launchers.
 
 
 When to use yaloader
@@ -107,14 +68,13 @@ When to use yaloader
 
 yaloader is a good fit when:
 
-- You want configs that know how to create the objects they describe
-- You want Pydantic v2 validation on your configs
-- You have class hierarchies you want to mirror in config inheritance
-- You want layered configs with explicit priority control
-- You prefer class-level type safety over string-based references
+*   **Your app is a pipeline of components.** You have various Models, Datasets, and Optimizers that you want to swap easily.
+*   **You need layered configuration.** You have "Base defaults", "Machine-specific paths", and "Per-experiment overrides" that you want to stack cleanly.
+*   **You want early validation.** You want to know that your config is wrong *before* your heavy application logic starts.
+*   **You value IDE support.** You want your configuration classes to be fully typed and discoverable.
 
 yaloader is **not** the right tool when:
 
-- You need CLI parameter overrides (consider Hydra)
-- You need experiment tracking (consider Sacred or MLflow)
-- You need environment-based settings management (consider Pydantic Settings or Dynaconf)
+*   **You need complex CLI overrides.** yaloader focuses on file-based configuration.
+*   **You need experiment tracking.** Use MLflow or Sacred alongside yaloader.
+*   **You only need simple environment variables.** Use Pydantic Settings instead.
