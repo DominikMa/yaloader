@@ -28,133 +28,101 @@ setattr(
 )
 ```
 
-Getting started
+Getting Started
 =======================================
 
-Overview
----------------------------------------
-
-YaLoader is a YAML configuration system and loader which allows you to load different configurations 
-from multiple sources and merge them into a single configuration while taking priority, correctness, hierarchy and 
-inheritance into account. A configuration can be specified for any python object.
-
-Using YaLoader can be divided into three steps:
-defining possible configurations, 
-loading YAML files or strings holding configuration information, and
-constructing the final configuration for. 
+yaloader is a type-safe configuration library designed for projects with complex, hierarchical component structures—like Machine Learning pipelines or plugin-based applications.
 
 Installation
 ---------------------------------------
 
-YaLoader is distributed over [PyPI](https://pypi.org/project/yaloader/), so
 ```bash
 pip install yaloader
 ```
-is all you need.
 
-````{tip}
-If you want to build the docs or run the tests, you can use
-```bash
-pip install yaloader[docs,tests]
-```
-to install the additional needed dependencies. 
-
-````
-
-
-Defining possible configurations
+The Component Pattern
 ---------------------------------------
 
+The core idea of yaloader is the **decoupling of configuration from implementation**. You define your logic in standard Python classes and your configuration in Pydantic-powered "Config" classes.
 
-
-Basic Examples
----------------------------------------
-
-### Loading a class
-
-Consider you have any class, and you want to configure and load it though a yaml file.
-For example a dataclass of a user:
+Suppose you have a Model and a Trainer:
 
 ```{code-cell} python3
----
-tags: [show-input]
----
-from dataclasses import dataclass
-from typing import Any
+class Model:
+    def __init__(self, layers: int, hidden_dim: int):
+        self.layers = layers
+        self.hidden_dim = hidden_dim
 
-@dataclass
-class User:
-    age: int
-    name: str
+class Trainer:
+    def __init__(self, model: Model, lr: float, batch_size: int):
+        self.model = model
+        self.lr = lr
+        self.batch_size = batch_size
 ```
 
-To load it from yaml, you first have to define its configuration.
+### 1. Define Config Classes
+
+Use the `@yaloader.loads(TargetClass)` decorator to register a config class. This tells yaloader: *"When you see this tag in YAML, use this config class to validate it, and create an instance of TargetClass when .load() is called."*
+
 ```{code-cell} python3
----
-tags: [show-input]
----
 import yaloader
-    
-@yaloader.loads(User)
-class UserConfig(yaloader.YAMLBaseConfig):
-    age: int
-    name: str
+
+@yaloader.loads(Model)
+class ModelConfig(yaloader.YAMLBaseConfig):
+    layers: int = 50
+    hidden_dim: int = 512
+
+@yaloader.loads(Trainer)
+class TrainerConfig(yaloader.YAMLBaseConfig):
+    model: ModelConfig = ModelConfig()
+    lr: float = 0.001
+    batch_size: int = 32
 ```
 
-Now a loader can be used to load a string or file holding the classes' configuration.
+### 2. The Configuration Workflow
+
+Working with yaloader involves two stages: **Loading** (gathering data) and **Construction** (building the objects).
+
+#### Stage A: Loading Defaults
+You typically load a "base" configuration that defines the default setup for your components.
+
 ```{code-cell} python3
----
-tags: [show-input]
----
 loader = yaloader.ConfigLoader()
-user_config = loader.construct_from_string("!User {age: 42, name: Alice}")
-print(type(user_config))
-print(user_config)
+
+# Load base defaults for our components
+loader.load_string("""
+- !Model {layers: 101, hidden_dim: 1024}
+- !Trainer {batch_size: 64}
+""")
 ```
 
-`user_config` now holds the configuration of the user.
-The user itself can be loaded using the `user_config.load()` method. 
+#### Stage B: Late Binding & Construction
+When you are ready to run, you "construct" your entry point. yaloader merges your local overrides with the previously loaded defaults.
+
 ```{code-cell} python3
----
-tags: [show-input]
----
-user = user_config.load()
-print(type(user))
-print(user)
+# Construct a Trainer with a specific learning rate override
+# All other fields (layers, hidden_dim, batch_size) are pulled from the loader's state.
+config = loader.construct_from_string("!Trainer {lr: 0.01}")
+
+print(f"Configured Batch Size: {config.batch_size}")
+print(f"Configured Model Layers: {config.model.layers}")
+
+# Create the actual Python objects
+trainer = config.load()
+print(f"Actual Trainer LR: {trainer.lr}")
+print(f"Actual Model Layers: {trainer.model.layers}")
 ```
 
+Why is this beneficial?
+---------------------------------------
 
-The loading is not limited to single configurations. Every valid YAML file, containing `!User` tags is fine.
-```{code-cell} python3
----
-tags: [show-input]
----
-loader = yaloader.ConfigLoader()
-all_user_configs = loader.construct_from_string(
-    """
-    - !User {age: 42, name: Alice}
-    - !User {age: 20, name: Bob}
-    - !User {age: 12, name: Peter}
-    """
-)
-print(all_user_configs)
-```
+1.  **Late Binding:** You don't hardcode which `Model` or `Dataset` your `Trainer` uses. You can swap implementations by just changing a tag in YAML.
+2.  **Type Safety:** Pydantic validates every field. If you provide `lr: "fast"` (a string), yaloader catches it during `construct_from_string` with a clear error message.
+3.  **Layered State:** The `ConfigLoader` acts as a repository of configuration state. You can layer multiple YAML files (e.g., `base.yaml`, `gpu_settings.yaml`, `experiment_01.yaml`) and yaloader handles the merging logic.
 
-### Adding multiple configurations to the loader
-The configuration loader allows you to add multiple configurations for the same tag
-which will be layered while construction.
+Next Steps
+---------------------------------------
 
-
-
-
-### Error messages
-Thanks to pydantic you also get nice error messages when an incorrect configuration will be loaded.
-```{code-cell} python3
----
-tags: [show-input, raises-exception]
----
-try:
-    loader.construct_from_string("!User {age: 'Not an int', name: Alice}")
-except yaloader.YAMLValueError as e:
-    raise e from None
-```
+*   Learn about {doc}`loading-and-priority` to manage complex override layers.
+*   See how {doc}`variable-configs` allow you to have multiple distinct configurations of the same class (e.g., `!TrainDataset` and `!ValDataset`).
+*   Check {doc}`cross-document-anchors` to keep hyper-parameters synchronized across components.

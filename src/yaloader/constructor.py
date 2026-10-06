@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import textwrap
-from typing import Callable
+from typing import Callable, TypeVar
 
 import yaml
 from pydantic import ValidationError
@@ -10,6 +10,8 @@ from yaml.parser import ParserError
 
 from yaloader import VarYAMLConfigBase, YAMLBaseConfig, YAMLConfigDumper, YAMLConfigLoader, YAMLValueError
 from yaloader.representer import get_representer_for_class
+
+_Config = TypeVar("_Config", bound=YAMLBaseConfig)
 
 
 def _check_extra_fields(cls: type[YAMLBaseConfig], mapping: dict, node: yaml.Node) -> None:
@@ -118,7 +120,7 @@ def get_multi_constructor_for_vars(
         config_instance: YAMLBaseConfig = var_yaml_config_class.model_construct(**mapping)  # type: ignore[arg-type]
         # Validate the inputs, but ignore missing errors
         try:
-            var_yaml_config_class.validate_config(config_instance, force_all=False)
+            config_instance.validate_config(force_all=False)
         except ValidationError as e:
             raise YAMLValueError(
                 f"Could not validate the configuration for the tag {node.tag}",
@@ -135,7 +137,7 @@ def loads(
     overwrite_tag: bool = False,
     yaml_loader: type[YAMLConfigLoader] | None = YAMLConfigLoader,
     yaml_dumper: type[YAMLConfigDumper] | None = YAMLConfigDumper,
-) -> Callable[[type[YAMLBaseConfig]], type[YAMLBaseConfig]]:
+) -> Callable[[type[_Config]], type[_Config]]:
     """A class decorator for yaml configs to add a simple load function for a given class.
 
     A load function, which gets all attributes of the config
@@ -146,7 +148,7 @@ def loads(
     :return: The class decorator
     """
 
-    def decorate(cls: type[YAMLBaseConfig]) -> type[YAMLBaseConfig]:
+    def decorate(cls: type[_Config]) -> type[_Config]:
         # If there is an explict yaml tag given use it
         if hasattr(cls, "_yaml_tag"):
             yaml_tag = cls._yaml_tag  # type: ignore[attr-defined]  # runtime-set private attr

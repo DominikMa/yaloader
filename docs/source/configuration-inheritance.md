@@ -28,102 +28,128 @@ setattr(
 )
 ```
 
-Configuration inheritance
+Configuration Inheritance
 =======================================
 
+yaloader config classes can inherit from each other just like regular Python classes.
+When a config is constructed, fields from its parent configs are included automatically.
 
-Installation
+This mirrors how ML pipelines are structured: all models share training parameters like `epochs` and `batch_size`, but each model family adds its own architecture-specific fields.
+
+
+Basic inheritance
 ---------------------------------------
 
-
-Basic Examples
----------------------------------------
-
-### Loading a class
-
-Consider you have any class, and you want to configure and load it though a yaml file.
-For example a dataclass of a user:
-
 ```{code-cell} python3
----
-tags: [show-input]
----
-from dataclasses import dataclass
-from typing import Any
-
-@dataclass
-class User:
-    age: int
-    name: str
-```
-
-To load it from yaml, you first have to define its configuration.
-```{code-cell} python3
----
-tags: [show-input]
----
 import yaloader
-    
-@yaloader.loads(User)
-class UserConfig(yaloader.YAMLBaseConfig):
-    age: int
-    name: str
+
+@yaloader.loads()
+class ModelConfig(yaloader.YAMLBaseConfig):
+    name: str = "unnamed"
+    epochs: int = 10
+
+@yaloader.loads()
+class ResNetConfig(ModelConfig):
+    layers: int = 50
 ```
 
-Now a loader can be used to load a string or file holding the classes' configuration.
+`ResNetConfig` inherits the `name` and `epochs` fields from `ModelConfig`. In YAML, both the parent and child tags work independently:
+
 ```{code-cell} python3
----
-tags: [show-input]
----
 loader = yaloader.ConfigLoader()
-user_config = loader.construct_from_string("!User {age: 42, name: Alice}")
-print(type(user_config))
-print(user_config)
+
+# Set defaults for all models
+loader.load_string("- !Model {epochs: 100}")
+
+# Set defaults specific to ResNet
+loader.load_string("- !ResNet {layers: 101}")
+
+config = loader.construct_from_string("!ResNet {}")
+print(f"name={config.name}, epochs={config.epochs}, layers={config.layers}")
 ```
 
-`user_config` now holds the configuration of the user.
-The user itself can be loaded using the `user_config.load()` method. 
-```{code-cell} python3
----
-tags: [show-input]
----
-user = user_config.load()
-print(type(user))
-print(user)
-```
+The `epochs` value comes from the loaded `!Model` config — inherited fields are resolved through the class hierarchy.
 
+This means you can define shared training parameters under `!Model` and architecture-specific settings under `!ResNet`, `!MLP`, etc.:
 
-The loading is not limited to single configurations. Every valid YAML file, containing `!User` tags is fine.
 ```{code-cell} python3
----
-tags: [show-input]
----
+@yaloader.loads()
+class MLPConfig(ModelConfig):
+    hidden_dim: int = 128
+    num_layers: int = 3
+
 loader = yaloader.ConfigLoader()
-all_user_configs = loader.construct_from_string(
-    """
-    - !User {age: 42, name: Alice}
-    - !User {age: 20, name: Bob}
-    - !User {age: 12, name: Peter}
-    """
-)
-print(all_user_configs)
+loader.load_string("- !Model {epochs: 50}")
+
+resnet = loader.construct_from_string("!ResNet {name: resnet50, layers: 50}")
+mlp = loader.construct_from_string("!MLP {name: small-mlp, hidden_dim: 64}")
+print(f"ResNet: epochs={resnet.epochs}, layers={resnet.layers}")
+print(f"MLP: epochs={mlp.epochs}, hidden_dim={mlp.hidden_dim}")
 ```
 
-### Adding multiple configurations to the loader
-The configuration loader allows you to add multiple configurations for the same tag
-which will be layered while construction.
+Both models inherit `epochs: 50` from the `!Model` config.
 
 
+Field resolution order
+---------------------------------------
 
+When constructing a config, fields are resolved from multiple sources. The full precedence (highest wins):
 
-### Error messages
-Thanks to pydantic you also get nice error messages when an incorrect configuration will be loaded.
+1. **Explicit local fields** — fields set directly in the YAML being constructed
+2. **Explicit inherited fields** — explicit fields from parent config classes (left base first)
+3. **Explicit loaded fields** — fields from loaded configs, ordered by priority (highest first)
+4. **Default fields** — same order as above, but for fields that weren't explicitly set
+
+"Explicit" means the field appeared in a YAML document. "Default" means it comes from the Python class definition.
+
 ```{code-cell} python3
+loader = yaloader.ConfigLoader()
+
+# Base model config at priority 0
+loader.load_string("- !Model {name: BaseModel, epochs: 50}")
+
+# ResNet config at priority 10
+loader.load_string(r"""
+priority: 10
 ---
-tags: [show-input, raises-exception]
----
-try:
-    loader.construct_from_string("!User {age: 'Not an int', name: Alice}")
-except yaloader.YAMLValueError as e:
-    raise e from None
+- !ResNet {layers: 152}
+""")
+
+config = loader.construct_from_string("!ResNet {name: MyResNet}")
+print(f"name={config.name}, epochs={config.epochs}, layers={config.layers}")
 ```
+
+Here `name` is "MyResNet" (explicit local), `epochs` is 50 (inherited from `!Model` loaded config), and `layers` is 152 (from `!ResNet` loaded config).
+
+
+Multiple inheritance
+---------------------------------------
+
+Config classes can inherit from multiple parent configs. The left-most base has the highest priority:
+
+```{code-cell} python3
+@yaloader.loads()
+class TrainerConfig(yaloader.YAMLBaseConfig):
+    lr: float = 0.001
+    batch_size: int = 32
+
+@yaloader.loads()
+class AugmentationConfig(yaloader.YAMLBaseConfig):
+    flip: bool = True
+    rotate: bool = False
+
+@yaloader.loads()
+class FullTrainingConfig(TrainerConfig, AugmentationConfig):
+    experiment_name: str = "default"
+```
+
+```{code-cell} python3
+loader = yaloader.ConfigLoader()
+loader.load_string("- !Trainer {lr: 0.01}")
+loader.load_string("- !Augmentation {flip: false, rotate: true}")
+
+config = loader.construct_from_string("!FullTraining {experiment_name: exp1}")
+print(f"lr={config.lr}, batch_size={config.batch_size}, flip={config.flip}, rotate={config.rotate}")
+```
+
+Fields from `TrainerConfig` (the left-most base) take precedence over `AugmentationConfig` if there were conflicts.
