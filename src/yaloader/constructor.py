@@ -138,11 +138,11 @@ def loads(
     yaml_loader: type[YAMLConfigLoader] | None = YAMLConfigLoader,
     yaml_dumper: type[YAMLConfigDumper] | None = YAMLConfigDumper,
 ) -> Callable[[type[_Config]], type[_Config]]:
-    """A class decorator for yaml configs to add a simple load function for a given class.
+    """Register a config class and its optional runtime constructor.
 
-    A load function, which gets all attributes of the config
-    and creates an instance of the given class with them as key word arguments,
-    is added to the config.
+    The default ``YAMLBaseConfig.load`` passes all config fields to ``loaded_class``
+    as keyword arguments. ``YAMLBaseConfig[T]`` separately declares the static return
+    type; callers must ensure that the constructor and any custom ``load`` agree with it.
 
     :param loaded_class: The class which should be loaded by this
     :return: The class decorator

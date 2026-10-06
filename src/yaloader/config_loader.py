@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import datetime
 import logging
-from inspect import isclass
 from pathlib import Path, PosixPath
-from typing import TYPE_CHECKING, Annotated, Any
+from typing import Annotated, Any
 
 import yaml
 from pydantic import BaseModel, Field
@@ -12,9 +11,6 @@ from yaml.constructor import ConstructorError
 from yaml.parser import ParserError
 
 from yaloader import VarYAMLConfigBase, YAMLBaseConfig, YAMLConfigLoader, get_multi_constructor_for_vars
-
-if TYPE_CHECKING:
-    from collections.abc import Iterator
 
 logger = logging.getLogger(__name__)
 
@@ -170,12 +166,19 @@ class ConfigLoader:
             raise RuntimeError(f"In the configs for the tag {tag} is more than one class.")
         config_object_class = configs_object_classes.pop()
 
-        # Get all config classes which it inherits from
-        # noinspection PyTypeChecker
-        config_class_bases: Iterator[type[YAMLBaseConfig]] = filter(
-            lambda x: isclass(x) and issubclass(x, YAMLBaseConfig) and x != YAMLBaseConfig,
-            config_object_class.__bases__,
-        )
+        # Generic specializations are not automatically registered by Pydantic.
+        # Use their origin unless the specialization has its own registration.
+        registered_config_classes = set(self.yaml_loader.yaml_config_classes.values())
+        config_class_bases: list[type[YAMLBaseConfig]] = []
+        for base in config_object_class.__bases__:
+            if not issubclass(base, YAMLBaseConfig) or base is YAMLBaseConfig:
+                continue
+            origin = base.__pydantic_generic_metadata__["origin"]
+            if origin is YAMLBaseConfig:
+                continue
+            if origin is not None and issubclass(origin, YAMLBaseConfig) and base not in registered_config_classes:
+                base = origin
+            config_class_bases.append(base)
 
         # Construct all bases, in reversed order (first base has the highest priority and should be at end of the list)
         # Construction MUST BE flat. Otherwise there might be circles.

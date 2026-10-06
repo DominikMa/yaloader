@@ -61,6 +61,38 @@ By default, the YAML tag is derived from the class name by removing the `Config`
 You can also specify a custom tag: `@yaloader.loads(Optimizer, _yaml_tag="!MyOpt")`.
 
 
+Typing the `load()` result
+---------------------------------------
+
+Specify the object type returned by `load()` as a type argument to `YAMLBaseConfig`:
+
+```python
+@yaloader.loads(Optimizer)
+class TypedOptimizerConfig(yaloader.YAMLBaseConfig[Optimizer]):
+    lr: float = 0.01
+    momentum: float = 0.9
+
+optimizer = TypedOptimizerConfig().load()  # Inferred as Optimizer
+```
+
+Subclasses inherit this return type, and their config fields remain visible to type checkers.
+If you omit the type argument, `load()` returns `Any` for static checking, preserving existing untyped configs.
+
+Pydantic creates specialized generic classes without registering them with yaloader. When a config inherits
+from `GenericParentConfig[Optimizer]`, the loader uses the registered `GenericParentConfig` to resolve inherited
+YAML values. You can instead explicitly register the specialization with its own tag; the loader then uses
+that registration. The generic parent must be registered just like an ordinary config parent.
+
+The type argument declares the static return type; `@loads(Optimizer)` supplies the runtime constructor.
+Using `YAMLBaseConfig[Optimizer]` alone does not register a constructor, so the default `load()` still raises
+`NotImplementedError` until one is registered. The decorator does not check that its constructor matches the type
+argument. When using the default `load()`, register a constructor that returns the declared type.
+
+Custom `load()` methods remain ordinary overrides and determine runtime behavior even when a constructor is
+registered. Annotate their return values with the selected type so type checkers can catch incompatible overrides.
+The constructor is private metadata and is excluded from model serialization and YAML output.
+
+
 Customizing the `load()` method
 ---------------------------------------
 
