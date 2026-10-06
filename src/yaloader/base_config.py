@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Generic
 
 from pydantic import BaseModel, ConfigDict, ValidationError
+from typing_extensions import TypeVar
 
 from yaloader.utils import full_object_name, remove_missing_errors
 
@@ -10,18 +11,21 @@ if TYPE_CHECKING:
     from pydantic_core import InitErrorDetails
 
 
+_Loaded = TypeVar("_Loaded", default=Any)
+
+
 class VarYAMLConfigBase:
     pass
 
 
-class YAMLBaseConfig(BaseModel):
+class YAMLBaseConfig(BaseModel, Generic[_Loaded]):
     """The base class for all config objects which are loaded from or dumped to yaml files.
 
-    Each config from which an actual object can be created has to implement
-    the :meth:`YAMLBaseConfig.load()` method.
+    The optional type argument specifies the return type of :meth:`YAMLBaseConfig.load`.
+    It defaults to ``Any``. Register a runtime constructor with ``@loads`` or override ``load``.
     """
 
-    _loaded_class: type | None = None
+    _loaded_class: type[_Loaded] | None = None
     """The class which is loaded by the configuration.
     Can be None if the loaded class is explicitly specified in the load method."""
 
@@ -95,7 +99,7 @@ class YAMLBaseConfig(BaseModel):
                     init_errors.append(init_err)
                 raise ValidationError.from_exception_data(title=e.title, line_errors=init_errors) from e
 
-    def load(self, *args: Any, **kwargs: Any) -> Any:
+    def load(self, *args: Any, **kwargs: Any) -> _Loaded:
         """Create the object the yaml config object is for.
 
         This basic constructor uses all attributes of the config as kwargs for the loaded class.
